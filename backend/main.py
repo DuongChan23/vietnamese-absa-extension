@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from .inference import ABSAPredictor
 from .preprocessing import prepare_reviews
+from .category_normalizer import merge_aspects
 
 
 # ============================================================
@@ -25,6 +26,7 @@ async def lifespan(app: FastAPI):
     try:
         predictor = ABSAPredictor()
         startup_error = None
+
     except Exception as exc:
         predictor = None
         startup_error = f"{type(exc).__name__}: {exc}"
@@ -57,7 +59,11 @@ app.add_middleware(
 # ============================================================
 
 class PredictRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=3000)
+    text: str = Field(
+        min_length=1,
+        max_length=3000,
+    )
+
     source: str = Field(
         default="unified",
         min_length=1,
@@ -95,11 +101,14 @@ def get_predictor():
 
 
 def validate_source(source: str, model):
-    if source != "unified" and source not in model.categories:
+    if (
+        source != "unified"
+        and source not in model.categories
+    ):
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Unknown source. "
+                "Unknown source. "
                 f"Allowed: {list(model.categories)}"
             ),
         )
@@ -123,21 +132,60 @@ def get_evaluation_note(source: str) -> str:
 
 
 # ============================================================
-# 5. HEALTH CHECK
+# 5. CATEGORY POSTPROCESSING
+# ============================================================
+
+CATEGORY_MERGE_POLICY = (
+    "case_alias_exact_span_sentiment_v1"
+)
+
+
+def build_merged_aspects(aspects):
+    """
+    Preserve original model predictions in `aspects`.
+
+    Produce a separate normalized/deduplicated
+    representation in `aspects_merged`.
+
+    IMPORTANT:
+    - Does not change AI predictions.
+    - Does not modify checkpoints or thresholds.
+    - Does not merge different sentiments.
+    - Does not deduplicate without valid offsets.
+    """
+
+    if not isinstance(aspects, list):
+        return []
+
+    return merge_aspects(aspects)
+
+
+# ============================================================
+# 6. HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
 def health():
     return {
         "ready": predictor is not None,
-        "error": startup_error if predictor is None else None,
-        "sources": list(predictor.categories) if predictor else [],
+        "error": (
+            startup_error
+            if predictor is None
+            else None
+        ),
+        "sources": (
+            list(predictor.categories)
+            if predictor
+            else []
+        ),
         "unified_available": predictor is not None,
+        "category_merge_available": True,
+        "category_merge_policy": CATEGORY_MERGE_POLICY,
     }
 
 
 # ============================================================
-# 6. SINGLE REVIEW INFERENCE
+# 7. SINGLE REVIEW INFERENCE
 # ============================================================
 
 @app.post("/predict")
@@ -146,28 +194,49 @@ def predict(req: PredictRequest):
     validate_source(req.source, model)
 
     try:
-        aspects = run_inference(req.text, req.source, model)
+        # Step 1: Original ABSA inference.
+        aspects = run_inference(
+            req.text,
+            req.source,
+            model,
+        )
 
+        # Step 2: Normalize categories and
+        # deduplicate equivalent predictions.
+        aspects_merged = build_merged_aspects(
+            aspects
+        )
+
+        # Step 3: Preserve original predictions
+        # and return merged predictions separately.
         return {
             "source": req.source,
             "text": req.text,
+
             "aspects": aspects,
+            "aspects_merged": aspects_merged,
+
             "model": "NB39+NB46+NB04",
-            "evaluation_note": get_evaluation_note(req.source),
+            "evaluation_note": (
+                get_evaluation_note(req.source)
+            ),
+            "category_merge_policy": (
+                CATEGORY_MERGE_POLICY
+            ),
         }
 
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=(
-                f"Inference failed: "
+                "Inference failed: "
                 f"{type(exc).__name__}: {exc}"
             ),
         )
 
 
 # ============================================================
-# 7. BATCH REVIEW INFERENCE
+# 8. BATCH REVIEW INFERENCE
 # ============================================================
 
 @app.post("/predict/batch")
@@ -187,26 +256,39 @@ def predict_batch(req: BatchPredictRequest):
     for review in prepared["reviews"]:
         text = review["text"]
 
+        # Keep original length protection.
         if len(text) > 3000:
             results.append({
                 **review,
                 "status": "error",
                 "aspects": [],
+                "aspects_merged": [],
                 "error": "text_too_long",
             })
             continue
 
         try:
+            # Original model inference.
             aspects = run_inference(
                 text,
                 req.source,
                 model,
             )
 
+            # New category normalization layer.
+            aspects_merged = build_merged_aspects(
+                aspects
+            )
+
             results.append({
                 **review,
                 "status": "ok",
+
+                # Raw predictions (unchanged).
                 "aspects": aspects,
+
+                # Normalized predictions.
+                "aspects_merged": aspects_merged,
             })
 
         except Exception as exc:
@@ -214,15 +296,26 @@ def predict_batch(req: BatchPredictRequest):
                 **review,
                 "status": "error",
                 "aspects": [],
+                "aspects_merged": [],
                 "error": type(exc).__name__,
             })
 
-    # Step 3: Return individual predictions and cleaning stats.
+    # Step 3: Return individual predictions
+    # and preprocessing statistics.
     return {
         "source": req.source,
         "product_id": req.product_id,
         "model": "NB39+NB46+NB04",
-        "evaluation_note": get_evaluation_note(req.source),
+        "evaluation_note": (
+            get_evaluation_note(req.source)
+        ),
+
+        # Metadata for merged categories.
+        "category_merge_policy": (
+            CATEGORY_MERGE_POLICY
+        ),
+
+        # Original response fields.
         "preprocessing": prepared["stats"],
         "rejected": prepared["rejected"],
         "results": results,
