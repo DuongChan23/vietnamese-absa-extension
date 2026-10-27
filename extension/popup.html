@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <main>
+    <h2>Phân tích ABSA</h2>
+    <p class="hint">Phân tích thống nhất với hai bộ nhãn đã học. Kết quả thử nghiệm có thể chứa nhãn khác nhau cho cùng một đoạn.</p>
+    <label for="review">Nội dung đánh giá</label><textarea id="review" rows="6" maxlength="3000" placeholder="Bôi đen một đoạn đánh giá trên trang rồi bấm 'Lấy văn bản', hoặc dán vào đây."></textarea>
+    <div class="actions"><button id="fromPage" type="button">Lấy văn bản được chọn</button><button id="analyze" type="button">Phân tích</button></div>
+    <p id="status" role="status"></p><div id="results"></div>
+  </main><script src="popup.js"></script>
+</body></html>

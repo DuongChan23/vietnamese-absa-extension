@@ -1,0 +1,5 @@
+body{font:14px system-ui,Arial,sans-serif;margin:0;color:#1c2530;width:100%;min-width:280px;background:#f7f9fc;min-height:100vh;box-sizing:border-box}main{padding:16px}h2{margin:0 0 14px;font-size:18px}label{display:block;font-weight:600;margin:12px 0 5px}select,textarea{box-sizing:border-box;width:100%;padding:9px;border:1px solid #bcc7d4;border-radius:7px;background:white;font:inherit}textarea{resize:vertical}.actions{display:flex;gap:8px;margin-top:12px}button{flex:1;border:0;border-radius:7px;background:#224cb2;color:white;padding:10px;cursor:pointer}button:first-child{background:#536b82}button:disabled{opacity:.55;cursor:wait}#status{min-height:18px;color:#46586b;white-space:pre-wrap}.item{background:#fff;border:1px solid #dce4ee;border-radius:8px;padding:10px;margin:8px 0}.item strong{display:block;margin-bottom:4px}.meta{color:#516172;font-size:12px}.positive{border-left:4px solid #2d9d73}.negative{border-left:4px solid #db5656}.neutral{border-left:4px solid #c4a13e}
+
+.hint{font-size:12px;color:#5c677b;line-height:1.4;margin:5px 0 12px}
+
+.actions{flex-wrap:wrap}.actions button{min-width:125px}main{max-width:650px;margin:0 auto}

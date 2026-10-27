@@ -1,0 +1,45 @@
+
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Trained AI models
+models/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.faiss
+
+# VnCoreNLP runtime files
+vncorenlp/
+
+# Datasets and evaluation exports
+data/
+exports/
+tests/reference/
+*.jsonl
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+.cache/
+
+# Editor and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,8 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2,<3
+transformers>=4.46.3,<5
+sentencepiece>=0.2.0
+numpy>=1.26
+py_vncorenlp
+# Install torch from https://pytorch.org/get-started/locally/ appropriate to your hardware
