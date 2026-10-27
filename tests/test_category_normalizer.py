@@ -10,49 +10,58 @@ from backend.category_normalizer import (
 class CategoryMergeTests(unittest.TestCase):
 
     # ========================================================
-    # TEST 1: MERGE SAME SPAN, CATEGORY AND SENTIMENT
+    # TEST 1: MERGE SAME SPAN AND SENTIMENT
     # ========================================================
 
     def test_merge_same_span_and_sentiment(self):
-        data = [
+        aspects = [
             {
-                "aspect": "đẹp",
+                "aspect": "thiết kế đẹp",
                 "start": 0,
-                "end": 3,
+                "end": 12,
                 "category": "DESIGN",
                 "sentiment": "positive",
                 "sources": ["visd4sa"],
             },
             {
-                "aspect": "đẹp",
+                "aspect": "thiết kế đẹp",
                 "start": 0,
-                "end": 3,
+                "end": 12,
                 "category": "Design",
                 "sentiment": "positive",
                 "sources": ["vicloabsa"],
             },
         ]
 
-        result = merge_aspects(data)
+        result = merge_aspects(aspects)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["category"], "Design")
         self.assertEqual(result[0]["merged_count"], 2)
 
         self.assertEqual(
+            result[0]["sources"],
+            ["visd4sa", "vicloabsa"],
+        )
+
+        self.assertEqual(
             set(result[0]["original_categories"]),
             {"DESIGN", "Design"},
         )
 
-        # Original model output must not be modified.
-        self.assertEqual(data[0]["category"], "DESIGN")
+        # Không thay đổi dữ liệu AI gốc.
+        self.assertEqual(aspects[0]["category"], "DESIGN")
+        self.assertEqual(
+            aspects[0]["sources"],
+            ["visd4sa"],
+        )
 
     # ========================================================
     # TEST 2: KEEP DIFFERENT SPANS AND SENTIMENTS
     # ========================================================
 
     def test_keep_different_spans_and_sentiments(self):
-        data = [
+        aspects = [
             {
                 "start": 0,
                 "end": 4,
@@ -79,9 +88,8 @@ class CategoryMergeTests(unittest.TestCase):
             },
         ]
 
-        result = merge_aspects(data)
+        result = merge_aspects(aspects)
 
-        # No predictions should be merged.
         self.assertEqual(len(result), 4)
 
         self.assertEqual(
@@ -95,7 +103,7 @@ class CategoryMergeTests(unittest.TestCase):
         )
 
     # ========================================================
-    # TEST 3: PRESERVE RAW BATCH PREDICTIONS
+    # TEST 3: PRESERVE ORIGINAL BATCH PREDICTIONS
     # ========================================================
 
     def test_preserve_raw_batch_predictions(self):
@@ -131,17 +139,23 @@ class CategoryMergeTests(unittest.TestCase):
             2,
         )
 
+        merged = result["results"][0]["aspects_merged"]
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["category"], "General")
+        self.assertEqual(merged[0]["merged_count"], 2)
+
         self.assertEqual(
-            len(result["results"][0]["aspects_merged"]),
-            1,
+            merged[0]["sources"],
+            ["visd4sa", "vicloabsa"],
         )
 
         self.assertEqual(
-            result["results"][0]["aspects_merged"][0]["category"],
-            "General",
+            set(merged[0]["original_categories"]),
+            {"GENERAL", "General"},
         )
 
-        # The original response must remain unchanged.
+        # Response đầu vào không được thay đổi.
         self.assertNotIn(
             "aspects_merged",
             response["results"][0],
@@ -153,7 +167,7 @@ class CategoryMergeTests(unittest.TestCase):
         )
 
     # ========================================================
-    # TEST 4: PRESERVE ALL SOURCES AFTER MERGING
+    # TEST 4: PRESERVE ALL MODEL SOURCES
     # ========================================================
 
     def test_merge_preserves_all_sources(self):
@@ -195,7 +209,7 @@ class CategoryMergeTests(unittest.TestCase):
             {"DESIGN", "Design"},
         )
 
-        # Ensure input predictions are unchanged.
+        # Không làm thay đổi dữ liệu đầu vào.
         self.assertEqual(
             aspects[0]["sources"],
             ["visd4sa"],
@@ -207,10 +221,10 @@ class CategoryMergeTests(unittest.TestCase):
         )
 
     # ========================================================
-    # TEST 5: KEEP SER&ACC AND SERVICE SEPARATE
+    # TEST 5: MERGE SER&ACC AND SERVICE
     # ========================================================
 
-    def test_service_labels_remain_separate(self):
+    def test_service_labels_are_merged(self):
         aspects = [
             {
                 "start": 0,
@@ -232,11 +246,32 @@ class CategoryMergeTests(unittest.TestCase):
 
         result = merge_aspects(aspects)
 
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 1)
 
         self.assertEqual(
-            {item["category"] for item in result},
+            result[0]["category"],
+            "Service",
+        )
+
+        self.assertEqual(
+            result[0]["merged_count"],
+            2,
+        )
+
+        self.assertEqual(
+            result[0]["sources"],
+            ["visd4sa", "vicloabsa"],
+        )
+
+        self.assertEqual(
+            set(result[0]["original_categories"]),
             {"SER&ACC", "Service"},
+        )
+
+        # Nhãn gốc vẫn được bảo toàn.
+        self.assertEqual(
+            aspects[0]["category"],
+            "SER&ACC",
         )
 
 

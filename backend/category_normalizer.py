@@ -1,10 +1,14 @@
 
-"""Category normalization and safe ABSA prediction merging."""
+"""Normalize ABSA categories and merge equivalent predictions."""
 
 from copy import deepcopy
 from typing import Any, Mapping
 
 
+# Unified reporting labels.
+# SER&ACC -> Service is a reporting-level decision
+# based on audited overlapping Shopee predictions.
+# Original model predictions remain unchanged.
 CATEGORY_ALIASES = {
     "GENERAL": "General",
     "General": "General",
@@ -12,6 +16,8 @@ CATEGORY_ALIASES = {
     "Design": "Design",
     "PRICE": "Price",
     "Price": "Price",
+    "SER&ACC": "Service",
+    "Service": "Service",
 }
 
 VALID_SENTIMENTS = {
@@ -20,7 +26,7 @@ VALID_SENTIMENTS = {
     "negative",
 }
 
-MERGE_POLICY = "case_alias_exact_span_sentiment_v1"
+MERGE_POLICY = "unified_category_alias_exact_span_v2"
 
 
 def normalize_category(label: Any) -> str:
@@ -40,6 +46,7 @@ def normalize_sources(value: Any) -> list[str]:
 
     for source in values:
         name = str(source or "").strip()
+
         if name and name not in result:
             result.append(name)
 
@@ -60,15 +67,20 @@ def merge_aspects(
     aspects: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """
-    Merge only predictions with identical:
-    - start/end offsets
-    - normalized category
-    - sentiment
+    Create normalized ABSA predictions.
 
-    Preserve every contributing source.
-    Never modify original predictions.
+    Merge only when:
+      - start and end are identical
+      - normalized categories are identical
+      - sentiments are identical
+
+    Preserve:
+      - raw prediction objects (input unchanged)
+      - original category labels
+      - all contributing sources
+
+    Predictions without valid offsets stay separate.
     """
-
     merged = []
     key_to_position = {}
 
@@ -93,10 +105,9 @@ def merge_aspects(
         )
 
         item["category"] = category
+        item["sentiment"] = sentiment
         item["sources"] = sources
-        item["original_categories"] = [
-            original_category
-        ]
+        item["original_categories"] = [original_category]
         item["merged_count"] = 1
 
         start = item.get("start")
@@ -125,9 +136,7 @@ def merge_aspects(
             merged.append(item)
             continue
 
-        previous = merged[
-            key_to_position[key]
-        ]
+        previous = merged[key_to_position[key]]
 
         previous["merged_count"] += 1
 
@@ -147,11 +156,7 @@ def merge_aspects(
 def enrich_batch_response(
     response: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """
-    Add aspects_merged to every result,
-    preserving original aspects.
-    """
-
+    """Add aspects_merged without replacing raw aspects."""
     updated = deepcopy(dict(response))
 
     results = updated.get("results")
