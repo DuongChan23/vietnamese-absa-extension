@@ -408,6 +408,38 @@
       }
     }
 
+    // Shopee review DOM (verified 2026-10-28):
+    // .BnXxkm > .rGdC5O contains exactly five SVG stars.
+    // icon-rating-solid = filled; icon-rating = outlined.
+    // Prefer this explicit distinction over SVG geometry: both
+    // variants share the same polygon points.
+    const starRows = card.querySelectorAll(
+      ".BnXxkm .rGdC5O, .d72He7 .rGdC5O"
+    );
+    for (const row of starRows) {
+      const stars = [...row.querySelectorAll("svg.shopee-svg-icon")];
+      if (stars.length !== 5) continue;
+
+      const kinds = stars.map((star) => {
+        if (star.classList.contains("icon-rating-solid")) return "filled";
+        if (star.classList.contains("icon-rating")) return "outline";
+        return "unknown";
+      });
+      if (kinds.includes("unknown")) continue;
+
+      const filledCount = kinds.filter((kind) => kind === "filled").length;
+      // Accept only a normal left-to-right sequence of filled then
+      // outline stars. This also correctly handles all five filled.
+      if (
+        filledCount >= 1 &&
+        kinds.every((kind, index) =>
+          index < filledCount ? kind === "filled" : kind === "outline"
+        )
+      ) {
+        return filledCount;
+      }
+    }
+
     // Dò đúng hàng 5 ngôi sao của đánh giá.
     const rows = [];
 

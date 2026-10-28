@@ -1,11 +1,157 @@
+
 <!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="popup.css"></head>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shopee Review AI</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
 <body>
-  <main>
-    <h2>Phân tích ABSA</h2>
-    <p class="hint">Phân tích thống nhất với hai bộ nhãn đã học. Kết quả thử nghiệm có thể chứa nhãn khác nhau cho cùng một đoạn.</p>
-    <label for="review">Nội dung đánh giá</label><textarea id="review" rows="6" maxlength="3000" placeholder="Bôi đen một đoạn đánh giá trên trang rồi bấm 'Lấy văn bản', hoặc dán vào đây."></textarea>
-    <div class="actions"><button id="fromPage" type="button">Lấy văn bản được chọn</button><button id="analyze" type="button">Phân tích</button></div>
-    <p id="status" role="status"></p><div id="results"></div>
-  </main><script src="popup.js"></script>
-</body></html>
+  <main class="app">
+    <header class="topbar">
+      <span class="logo" aria-hidden="true">▣</span>
+      <div class="brand">
+        <h1>Shopee Review AI</h1>
+        <p>Trợ lý đánh giá sản phẩm</p>
+      </div>
+      <span id="connection" class="connection">Đang kết nối</span>
+    </header>
+
+    <section class="card product-card">
+      <div class="product-row">
+        <div class="product-art" aria-hidden="true">▤</div>
+        <div class="product-copy">
+          <p class="eyebrow">SẢN PHẨM ĐANG XEM</p>
+          <h2 id="productName">
+            Mở trang sản phẩm Shopee để bắt đầu
+          </h2>
+          <p id="productPrice" class="price"></p>
+          <p id="productMeta" class="muted small">
+            Thông tin sẽ được tải khi phân tích.
+          </p>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <label class="field-label" for="reviewLimit">
+        Số bình luận cần phân tích
+      </label>
+
+      <div id="limitChoices" class="choice-row"
+           role="group" aria-label="Số bình luận">
+        <button type="button" class="choice"
+                data-limit="50">50</button>
+        <button type="button" class="choice active"
+                data-limit="100" aria-pressed="true">100</button>
+        <button type="button" class="choice"
+                data-limit="200">200</button>
+      </div>
+
+      <input id="reviewLimit" type="hidden" value="100">
+
+      <button id="runAnalysis" class="primary" type="button">
+        Phân tích đánh giá sản phẩm
+      </button>
+
+      <div id="progressWrap" class="progress-wrap" hidden>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+        <span id="progressText" class="small muted">
+          Đang xử lý...
+        </span>
+      </div>
+
+      <p id="status" class="status" role="status"
+         aria-live="polite">
+        Đang kiểm tra Backend...
+      </p>
+      <p id="collectionInfo" class="small muted" hidden></p>
+    </section>
+
+    <div id="dashboard" hidden>
+      <section class="card">
+        <div class="section-head">
+          <h2>Tổng quan cảm xúc</h2>
+          <span id="aspectCount" class="chip">0 aspect</span>
+        </div>
+        <div id="sentimentCards" class="sentiment-grid"></div>
+        <p class="footnote">
+          Tỷ lệ theo lượt dự đoán aspect,
+          không phải tỷ lệ bình luận.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Phân bố số sao</h2>
+          <span id="ratingSample" class="chip"></span>
+        </div>
+
+        <div class="rating-layout">
+          <div class="rating-average">
+            <strong id="averageRating">—</strong>
+            <span class="stars">★★★★★</span>
+            <small>Trên 5 sao</small>
+          </div>
+          <div id="ratingBars" class="rating-bars"></div>
+        </div>
+
+        <p class="footnote">
+          Chỉ tính trên các bình luận đã thu thập.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Đánh giá theo khía cạnh</h2>
+        <div id="categoryBars"></div>
+        <p class="footnote">
+          Tên nhãn được dịch để dễ đọc;
+          dự đoán gốc không thay đổi.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Bình luận chi tiết</h2>
+          <span id="reviewCount" class="chip"></span>
+        </div>
+
+        <div id="ratingFilters" class="filters"
+             role="group"
+             aria-label="Lọc bình luận theo số sao"></div>
+
+        <div id="reviewList" class="review-list"></div>
+      </section>
+    </div>
+
+    <details class="manual card">
+      <summary>Phân tích một đoạn đánh giá riêng</summary>
+      <label class="field-label" for="review">
+        Nội dung đánh giá
+      </label>
+
+      <textarea id="review" rows="3" maxlength="3000"
+        placeholder="Dán bình luận hoặc chọn văn bản trên Shopee..."></textarea>
+
+      <div class="manual-actions">
+        <button id="fromPage" class="secondary" type="button">
+          Lấy văn bản chọn
+        </button>
+        <button id="analyze" class="secondary" type="button">
+          Phân tích
+        </button>
+      </div>
+      <div id="results" class="manual-results"></div>
+    </details>
+
+    <footer>
+      Phân tích dựa trên bình luận đã thu thập ·
+      Kết quả AI có thể sai sót
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
