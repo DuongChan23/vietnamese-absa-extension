@@ -1,14 +1,18 @@
+
 {
   "manifest_version": 3,
   "name": "Vietnamese ABSA Analyzer (Local)",
   "description": "Persistent side-panel review analyzer powered by local ABSA FastAPI.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "sidePanel"
   ],
   "host_permissions": [
+    "https://shopee.vn/*",
+    "https://*.shopee.vn/*",
     "http://127.0.0.1/*"
   ],
   "action": {

@@ -1,85 +1,115 @@
-# Vietnamese ABSA — Chrome Extension + FastAPI
+# Vietnamese ABSA Shopee — Hướng dẫn cài đặt và chạy thử
 
-A local prototype of a **Vietnamese aspect-based sentiment analysis (ABSA)** system, trained using data prepared from **UIT-ViSD4SA** and **ViCloABSA**. Chrome Extension communicates with a Python FastAPI backend that loads the locally stored trained checkpoints.
+> **Phiên bản tài liệu:** 30/10/2026 · **Phạm vi:** chạy hệ thống cục bộ trên Windows 10/11, gồm FastAPI và Chrome Extension. Hướng dẫn được đối chiếu với `backend/main.py`, `backend/inference.py`, `extension/manifest.json`, các module thu thập/batch và báo cáo dự án hiện có. **Không phải hướng dẫn huấn luyện lại các notebook Colab.**
 
-> **Status (2026-10-27):** The local Windows inference path and the `unified` endpoint have been successfully tried with a Vietnamese phone review. This is a research prototype, **not a production-ready review crawler**. Automated retrieval of Shopee reviews is **not yet implemented**. The frontend is temporary.
+## 1. Chức năng hệ thống
 
-## Architecture
+Hệ thống phân tích bình luận tiếng Việt theo **khía cạnh** (Aspect-Based Sentiment Analysis — ABSA):
+
+1. **NB39 — XLM-R Joint Biaffine:** đề xuất đoạn khía cạnh (span) và nhóm khía cạnh (category).
+2. **NB46 — Whole-Span Boundary Reranker:** xếp hạng và lựa chọn lại các ứng viên NB39 đã tạo.
+3. **NB04 — PhoBERT ASC:** dự đoán cảm xúc `positive`, `neutral` hoặc `negative` cho mỗi đoạn được giữ lại.
+
+**NB55** là notebook **đánh giá**, không phải checkpoint chạy trên backend. Chrome Extension gửi yêu cầu HTTP tới FastAPI; model được tải và chạy ở máy có FastAPI, không chạy trực tiếp trong trình duyệt.
 
 ```text
-Chrome Side Panel (Manifest V3)
-         |
-         | POST http://127.0.0.1:8000/predict
-         v
-     FastAPI backend
-         |
-         +--> NB39: XLM-R Joint Biaffine (aspect spans + category candidates)
-         +--> NB46: Whole-span Boundary Reranker (candidate re-ranking)
-         +--> NB04: PhoBERT ASC (sentiment for selected spans)
-         |
-         v
-    JSON: aspect, offsets, category, sentiment
+Chrome/Shopee → Extension (Side Panel) → FastAPI :8000
+                                            │
+                           NB39 → NB46 → NB04
+                                            │
+                   JSON (span/category/sentiment) → Side Panel
 ```
 
-**NB20** is a training-stage ancestor of NB39, and its exported model directory supplies the tokenizer and configuration to the local backend. **NB55** is the unified offline evaluation notebook; it does **not** produce a new set of model weights. This repository reimplements inference rather than running NB55 itself.
+## 2. Yêu cầu trước khi chạy
 
-## Research pipeline and results
+- **Windows 10/11**, Command Prompt (CMD) hoặc PowerShell.
+- **Python 3.11** (cấu hình chạy local trước đó dùng 3.11.9).
+- **Java** có thể chạy được lệnh `java -version` (máy thử trước đây dùng Java 21.0.2).
+- **Google Chrome** có tính năng Manifest V3 Side Panel.
+- Mã nguồn **đủ các thư mục `backend/`, `extension/`, `models/`, `vncorenlp/`**.
+- Các **checkpoint đã huấn luyện** tải từ Drive của nhóm; repository nguồn không nhất thiết có các tệp lớn này.
+- Kết nối mạng lúc cài thư viện và có thể khi XLM-R tải trọng số nền lần đầu. Việc chạy sau đó có thể sử dụng cache đã tải.
 
-| Notebook | Responsibility |
+> **Quan trọng:** Nếu chỉ có slide/README mà chưa có source code hoặc checkpoint thì **chưa thể chạy dự đoán AI**. File README này không tự cung cấp trọng số mô hình.
+
+## 3. Kiểm tra cấu trúc thư mục
+
+Đặt `README.md` tại thư mục gốc của project, cùng cấp với `backend/`, `extension/`, `models/`:
+
+```text
+vietnamese-absa-extension/           # ví dụ tên thư mục project
+├── README.md
+├── backend/
+│   ├── main.py
+│   ├── inference.py
+│   ├── preprocessing.py
+│   ├── category_normalizer.py
+│   └── requirements.txt
+├── extension/
+│   ├── manifest.json
+│   ├── background.js
+│   ├── popup.html
+│   ├── popup.css
+│   ├── popup.js
+│   ├── collectors/
+│   │   ├── product_collector.js
+│   │   └── review_collector.js
+│   └── services/
+│       ├── batch_service.js
+│       └── analytics_service.js
+├── models/
+│   ├── ate_category_conditioned_v1/model/
+│   │   ├── conditional_span.pt
+│   │   ├── model_config.json
+│   │   └── ... các file tokenizer từ NB20
+│   ├── absa_joint_biaffine_span_pair_v1/
+│   │   ├── joint_best.pt
+│   │   └── locked_policy.json
+│   ├── absa_joint46_boundary_ranking_pilot_v1/
+│   │   ├── reranker_best.pt
+│   │   └── pilot_policy.json
+│   └── phobert_asc_training/model/
+│       ├── model.safetensors       # hoặc file trọng số tương ứng
+│       ├── config.json
+│       ├── tokenizer_config.json
+│       ├── bpe.codes
+│       ├── vocab.txt
+│       └── ... các file tokenizer cần thiết
+├── vncorenlp/
+│   ├── VnCoreNLP-1.2.jar
+│   └── models/wordsegmenter/
+│       ├── vi-vocab
+│       └── wordsegmenter.rdr
+└── tests/                         # nếu có mã kiểm thử
+```
+
+**Không** đặt toàn bộ file `.py` và `.js` chung trong thư mục gốc: `main.py` dùng các import tương đối (`.inference`, `.preprocessing`, ...), còn extension tham chiếu `collectors/` và `services/` theo đường dẫn riêng.
+
+### Phiên bản checkpoint cần khớp
+
+| Thành phần | SHA-256 đã ghi trong thí nghiệm ACTIVE |
 |---|---|
-| NB01 | Normalize and clean the two datasets |
-| NB04 | Train PhoBERT Aspect Sentiment Classification |
-| NB20 | Train category-conditioned XLM-R extractor |
-| NB39 | Train Joint Biaffine extractor based on NB20 |
-| NB46 | Train frozen-NB39 residual boundary reranker |
-| NB55 | Evaluate Full ABSA Baseline versus Proposed on DEV |
+| NB20 — `conditional_span.pt` | `775be14671de87c03ef228b19ef199f70f70a57b000463f382f517137f1b2944` |
+| NB39 — `joint_best.pt` | `b32923b7e9db9713354ccaaad4b21390ce621f34ddeeb4d9d37a0e65722c5262` |
+| NB46 — `reranker_best.pt` | `49f60b8027c0dce029f72365bb2c3de5bd4587e5f65cdede593374cd4bae242b` |
 
-**NB55 DEV results from the completed Colab run** (exact-span, category and sentiment evaluation; source-aware evaluation, *not* unified mode):
-
-| Metric | Baseline (NB39 + NB04) | Proposed (NB39 + NB46 + NB04) |
-|---|---:|---:|
-| Span F1 | 66.349% | 66.768% |
-| Span + Category F1 | 64.263% | 64.826% |
-| Span + Sentiment F1 | 63.657% | 64.140% |
-| **Full ABSA F1** | **61.708%** | **62.315%** |
-
-Proposed improves DEV Full ABSA F1 by approximately **+0.608 percentage points** (displayed values are rounded). DEV has been used repeatedly during development; this is **not an untouched TEST score**.
-
-### About `source: "unified"`
-
-The category-conditioned extractor was evaluated in NB55 with a **known dataset source** per review. The local app provides an **experimental** `unified` mode that runs category queries for both datasets and combines exactly matching predictions. This mode has **not been evaluated with the NB55 F1 protocol**, and category synonyms across datasets are **not semantically normalized** yet. Do not cite 62.315% as a metric for `unified` mode.
-
-## Project structure
-
-```text
-backend/
-  main.py                  # FastAPI: /health, /predict
-  inference.py             # Load local checkpoints and perform proposed inference
-  requirements.txt
-extension/
-  manifest.json            # Chrome Manifest V3
-  background.js            # Side Panel interaction
-  popup.html               # Prototype UI, not final design
-  popup.css
-  popup.js
-models/                     # Local checkpoints (excluded from Git)
-vncorenlp/                  # Local word segmentation assets (excluded from Git)
-experimental/
-  shopee_modules/           # Draft modules for product/review batch processing; NOT deployed
-```
-
-## Prerequisites
-
-- Windows 10/11 (tested by the project owner with Python **3.11.9**)
-- Python 3.11 and Java 21 (local machine reported Java **21.0.2**)
-- Chrome with support for Manifest V3 Side Panel
-- Trained checkpoints exported from your own Colab/Drive; **not included in this repo**
-- VnCoreNLP 1.2 resources (`wseg`)
-
-## Local setup on Windows (CMD)
+Trong Windows CMD, tính hash để đối chiếu:
 
 ```bat
-cd /d C:\Users\Admin\Downloads\vietnamese-absa-extension
+certutil -hashfile models\absa_joint_biaffine_span_pair_v1\joint_best.pt SHA256
+certutil -hashfile models\absa_joint46_boundary_ranking_pilot_v1\reranker_best.pt SHA256
+```
+
+Backend **kiểm tra** rằng hash checkpoint NB39 trùng với `base_checkpoint_sha256` trong `pilot_policy.json` của NB46. Nếu dùng nhầm hai phiên bản, backend sẽ không sẵn sàng.
+
+## 4. Cài môi trường Python trên Windows
+
+Mở **CMD**, chuyển vào thư mục project thực tế (thay đường dẫn dưới bằng đường dẫn trên máy bạn):
+
+```bat
+cd /d "C:\duong-dan\vietnamese-absa-extension"
+py -3.11 --version
+java -version
 py -3.11 -m venv .venv
 .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
@@ -87,116 +117,197 @@ python -m pip install -r backend\requirements.txt
 python -m pip install torch protobuf
 ```
 
-Use a PyTorch build suitable for your machine. The local run in this project used a CPU build; CUDA was unavailable.
+Nếu máy có GPU NVIDIA, hãy cài bản PyTorch tương ứng với driver/CUDA theo trang chính thức <https://pytorch.org/get-started/locally/>. **CPU vẫn có thể chạy**, nhưng việc tải model và suy luận sẽ chậm hơn nhiều.
 
-### Add local model artifacts
+Nếu bạn dùng **PowerShell**, câu lệnh kích hoạt môi trường là:
 
-Download your **own** files from the Google Drive `/ABSA/exports/` structure:
-
-```text
-models/
-├── ate_category_conditioned_v1/
-│   └── model/
-│       ├── conditional_span.pt
-│       ├── model_config.json
-│       └── [all tokenizer files]
-├── absa_joint_biaffine_span_pair_v1/
-│   ├── joint_best.pt
-│   └── locked_policy.json
-├── absa_joint46_boundary_ranking_pilot_v1/
-│   ├── reranker_best.pt
-│   └── pilot_policy.json
-└── phobert_asc_training/
-    └── model/
-        ├── model.safetensors
-        ├── config.json
-        ├── bpe.codes
-        ├── vocab.txt
-        └── [other tokenizer files]
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
-Check SHA-256 of key checkpoints before startup:
+Nếu PowerShell chặn script, có thể dùng **CMD** với `activate.bat` hoặc chạy trực tiếp `.venv\Scripts\python.exe` mà không cần kích hoạt môi trường.
 
-| Artifact | Expected SHA-256 |
-|---|---|
-| NB20 `conditional_span.pt` | `775be14671de87c03ef228b19ef199f70f70a57b000463f382f517137f1b2944` |
-| NB39 `joint_best.pt` | `b32923b7e9db9713354ccaaad4b21390ce621f34ddeeb4d9d37a0e65722c5262` |
-| NB46 `reranker_best.pt` | `49f60b8027c0dce029f72365bb2c3de5bd4587e5f65cdede593374cd4bae242b` |
+### Kiểm tra VnCoreNLP
 
-The project code also validates that NB46's `base_checkpoint_sha256` matches NB39.
+Dữ liệu VnCoreNLP lấy từ dự án chính thức: <https://github.com/vncorenlp/VnCoreNLP>. Kiểm tra đủ file jar và bộ `wordsegmenter` như cấu trúc ở mục 3. Trên Windows, tải thủ công bộ dữ liệu có thể dễ hơn dùng lệnh tải tự động.
 
-### VnCoreNLP on Windows
-
-The `py_vncorenlp.download_model` helper may require `wget` and can fail in Windows CMD. Download the official files into the following layout instead:
-
-```text
-vncorenlp/
-  VnCoreNLP-1.2.jar
-  models/
-    wordsegmenter/
-      vi-vocab
-      wordsegmenter.rdr
-```
-
-Official repository: https://github.com/vncorenlp/VnCoreNLP
-
-Confirm it works:
+Sau đó thử (từ thư mục gốc, khi môi trường Python đã kích hoạt):
 
 ```bat
-python -c "import py_vncorenlp,os; p=os.path.abspath('vncorenlp'); m=py_vncorenlp.VnCoreNLP(annotators=['wseg'],save_dir=p); print(m.word_segment('Điện thoại có màn hình đẹp nhưng pin rất yếu.'))"
+python -c "import py_vncorenlp,os; p=os.path.abspath('vncorenlp'); m=py_vncorenlp.VnCoreNLP(annotators=['wseg'],save_dir=p); print(m.word_segment('Điện thoại có màn hình đẹp nhưng pin yếu.'))"
 ```
 
-### Run the backend
+Nếu in ra danh sách câu đã tách từ, bộ tách từ hoạt động. VnCoreNLP được sử dụng ở nhánh **PhoBERT ASC**, không phải bộ sửa lỗi chính tả/từ viết tắt tự động.
+
+## 5. Khởi động FastAPI Backend
+
+Trong **CMD số 1** tại thư mục gốc project (đang bật `.venv`):
 
 ```bat
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-- Health: http://127.0.0.1:8000/health (check `ready: true`)
-- Interactive API: http://127.0.0.1:8000/docs
+**Không** chạy `python main.py` trong thư mục `backend` khi cấu trúc code dùng relative imports. **Không** thêm `--reload` trong buổi demo nếu muốn tránh tải lại những checkpoint lớn không cần thiết.
 
-Example `/predict` request:
+Lần khởi động có thể chậm do phải tải NB39, NB46, PhoBERT và VnCoreNLP vào bộ nhớ. **Không kết luận đã sẵn sàng chỉ vì Uvicorn bắt đầu nghe cổng**; luôn kiểm tra `/health`.
 
-```json
-{
-  "text": "Điện thoại có màn hình đẹp nhưng pin rất yếu.",
-  "source": "unified"
-}
+Mở trình duyệt:
+
+- **Health:** <http://127.0.0.1:8000/health>
+- **Swagger API:** <http://127.0.0.1:8000/docs>
+
+Kết quả `/health` phải có `"ready": true`. Nếu `"ready": false`, xem giá trị `"error"` hoặc console CMD số 1 để tìm lỗi nạp mô hình. HTTP 200 của `/health` **không** có nghĩa mô hình đã sẵn sàng: phải kiểm tra trường `ready`.
+
+## 6. Chạy thử API trước khi mở Extension
+
+Mở **PowerShell số 2**. Đảm bảo Backend vẫn chạy trong CMD số 1.
+
+### Bước 6.1 — Kiểm tra trạng thái
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/health" | ConvertTo-Json -Depth 5
 ```
 
-The observed local smoke test returned two aspects (`SCREEN`/positive and `BATTERY`/negative). Predictions are model outputs and may include overly broad aspect spans.
+### Bước 6.2 — Phân tích một bình luận
 
-### Load Chrome Extension
+```powershell
+$payload = @{
+    text = "Áo đẹp nhưng chất vải hơi mỏng, giao hàng nhanh."
+    source = "unified"
+} | ConvertTo-Json -Depth 5
 
-1. Navigate to `chrome://extensions` and enable Developer Mode.
-2. Use **Load unpacked** and select this repository's **`extension/`** directory.
-3. Open the extension's side panel and analyze text while the FastAPI server is running.
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/predict" `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($payload)) |
+    ConvertTo-Json -Depth 10
+```
 
-The extension UI is only a test harness; the final product UI has not yet been designed.
+Kết quả JSON **có thể** bao gồm:
 
-## Shopee and product analytics — planned, not yet shipped
+- `text`: văn bản gốc;
+- `source`: ví dụ `unified`;
+- `aspects`: **dự đoán gốc**, gồm `aspect`, `start`, `end`, `category`, `sentiment`;
+- `aspects_merged`: bản gộp nhãn tương đương để hỗ trợ giao diện;
+- `model`: `NB39+NB46+NB04`;
+- `evaluation_note`: cảnh báo tương ứng với chế độ suy luận.
 
-Requested next step: analyze **many reviews for a whole product**, rather than manually highlighting one review at a time.
+Kết quả span/category/sentiment **phụ thuộc checkpoint**, không nên chép cố định JSON dự đoán để coi là đáp án đúng. Bạn cũng có thể thử `"source": "vicloabsa"` (nhãn miền quần áo) hoặc `"source": "visd4sa"` (nhãn miền điện thoại) với đúng category ontology của dữ liệu đó.
 
-`experimental/shopee_modules/` contains **draft, not-yet-integrated** components for input validation and review batch/product analytics. These files are kept separate from the working backend because they have not been tested on the owner's Windows installation. **No automatic Shopee review collector is in this version.** Any future integration must respect website permissions and access limits; do not assume access to hidden reviews or unofficial endpoints.
+### Bước 6.3 — Phân tích nhiều bình luận
 
-## Reproducibility and known limitations
+```powershell
+$batch = @{
+    source = "unified"
+    product_id = "demo-product-001"
+    reviews = @(
+        @{ review_id="r01"; text="Áo đẹp nhưng chất vải hơi mỏng."; rating=4 },
+        @{ review_id="r02"; text="Giao hàng nhanh, đóng gói cẩn thận."; rating=5 },
+        @{ review_id="r03"; text="Shop giao chậm quá!"; rating=2 }
+    )
+} | ConvertTo-Json -Depth 10
 
-- Model checkpoints and VnCoreNLP assets are excluded from Git by `.gitignore` because they are large and/or have separate distribution terms.
-- The baseline NB55 DEV run and its prediction exports are **not stored in this repository**; they remain in the owner's Drive exports. Optionally use them in a private `tests/reference/` folder to check parity.
-- NB01 audit indicated **5 annotation conflicts pending manual review** (`passed_with_review_pending`).
-- `unified` mode has not been benchmarked against gold labels.
-- Automated Shopee extraction, batch analysis integration, public hosting, authentication/hardening, and production UI remain planned work.
-- This project does not call Gemini API for local inference. A future evaluation against Gemini must use the same TEST protocol and evaluator.
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8000/predict/batch" `
+    -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Body ([System.Text.Encoding]::UTF8.GetBytes($batch)) |
+    ConvertTo-Json -Depth 12
+```
 
-## Roadmap
+Ở kết quả batch, kiểm tra các khóa `results`, `preprocessing`, `rejected` và `status` của từng bình luận. API chỉ nhận **tối đa 30 bình luận mỗi request**; Extension tự chia thành **các lô 10 bình luận**.
 
-1. Add tests that compare local FastAPI predictions against saved NB55 source-aware DEV predictions.
-2. Add authorized review ingestion and stable batch-analysis API, then integrate the Shopee module.
-3. Evaluate unified-category behavior separately and map equivalent categories with a validated taxonomy.
-4. Evaluate the locked models on an untouched TEST split and (optionally) compare with Gemini under the same criteria.
-5. Design a production Chrome Side Panel interface.
+**Lưu ý:** `source: "unified"` là chế độ thực nghiệm kết hợp các bộ category của hai nguồn. **Không dùng F1 của NB55 để khẳng định hiệu năng của chế độ `unified`**, vì NB55 đánh giá theo `source` xác định sẵn của từng review.
 
-## License
+## 7. Chạy thử Chrome Extension trên Shopee
 
-No license has been selected yet. Do not assume permission to redistribute model weights, pretrained assets, or source datasets.
+1. Đảm bảo Backend đang chạy và `/health` trả `ready: true`.
+2. Mở Chrome, nhập `chrome://extensions`.
+3. Bật **Developer mode** (Chế độ dành cho nhà phát triển).
+4. Chọn **Load unpacked** (Tải tiện ích đã giải nén).
+5. **Chọn thư mục `extension/`** — đây là thư mục có file `manifest.json`.
+6. Mở một **trang sản phẩm Shopee Việt Nam** (`https://shopee.vn/...`) và để phần đánh giá tải xong.
+7. Nhấn biểu tượng Extension để mở **Side Panel**.
+
+### Cách A — Demo nhanh một bình luận (ít phụ thuộc giao diện Shopee)
+
+- Dán văn bản vào ô **Nội dung đánh giá**.
+- Nhấn **Phân tích**.
+- Xem các khía cạnh và nhãn cảm xúc hiển thị.
+- Hoặc bôi đen một đoạn văn bản trên trang, nhấn **Lấy văn bản được chọn**, rồi **Phân tích**.
+
+### Cách B — Demo theo một sản phẩm Shopee
+
+- Nhấn **Lấy thông tin sản phẩm Shopee** để xem thông tin sản phẩm khi collector đọc được từ trang.
+- Chọn mục tiêu **50 / 100 / 200 bình luận**.
+- Nhấn **Lấy bình luận Shopee** và xem số review thực tế thu thập được, số sao, lý do dừng.
+- Nhấn **Phân tích tất cả bình luận đã lấy**.
+- Theo dõi tiến độ các batch, thống kê category/sentiment, xem danh sách review.
+- Nếu giao diện hiện các nút xuất, dùng **Xuất JSON / Xuất CSV** để lưu dữ liệu thử nghiệm.
+
+**Lưu ý về collector:** Đọc bình luận từ **DOM đang hiển thị** trên trang Shopee và tùy trạng thái tải trang/phân trang. Không bảo đảm thu đủ 50/100/200 bình luận với mọi sản phẩm; không sử dụng để vượt quyền truy cập hoặc cơ chế bảo vệ của website. Đây là prototype, không phải dịch vụ scraping độc lập đã kiểm thử trên mọi thay đổi giao diện Shopee.
+
+## 8. Tự kiểm tra trước buổi demo
+
+- [ ] Mở đúng thư mục project, nhìn thấy `backend/main.py` và `extension/manifest.json`.
+- [ ] `python --version` là bản Python đúng trong `.venv`.
+- [ ] `java -version` hoạt động; file VnCoreNLP đầy đủ.
+- [ ] Đúng các checkpoint, tokenizer và file policy; hash NB39/NB46 khớp.
+- [ ] Chạy `python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000`.
+- [ ] `/health` có `"ready": true`.
+- [ ] Thử `/predict` bằng văn bản tự nhập.
+- [ ] Thử `/predict/batch` với 2–3 bình luận trước khi chạy số lượng lớn.
+- [ ] Chrome đã tải Extension từ thư mục `extension/`.
+- [ ] Trang sản phẩm Shopee đã hiển thị phần bình luận.
+- [ ] Lấy được một số review, phân tích và xuất dữ liệu (nếu collector hỗ trợ trang hiện tại).
+
+Nếu có các file unit test `tests/test_preprocessing.py`, `tests/test_category_normalizer.py`, có thể chạy từ gốc dự án:
+
+```bat
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Kiểm thử preprocessing/normalizer chỉ kiểm tra **logic phần mềm**, không thay thế đánh giá F1 của mô hình AI.
+
+## 9. Xử lý lỗi thường gặp
+
+| Triệu chứng | Nguyên nhân có thể | Cách xử lý |
+|---|---|---|
+| `'py' is not recognized` | Không có Python Launcher hoặc Python chưa cài | Kiểm tra `python --version`; cài đúng Python 3.11 |
+| `No module named uvicorn / fastapi` | Chưa cài dependencies hoặc dùng sai `.venv` | Kích hoạt `.venv`, chạy `python -m pip install -r backend\requirements.txt` |
+| `ModuleNotFoundError: backend` | Chạy lệnh không ở gốc project hoặc thiếu cấu trúc `backend/` | `cd` về thư mục có `backend/`, chạy `python -m uvicorn backend.main:app ...` |
+| `ready: false` | Backend chạy HTTP nhưng lỗi nạp model | Xem `error` trong `/health`; kiểm tra model/tokenizer/VnCoreNLP |
+| `FileNotFoundError` / thiếu checkpoint | Chưa copy đủ file model/Drive | Đối chiếu cây thư mục ở mục 3 |
+| `NB39/NB46 SHA mismatch` | Checkpoint hoặc policy không cùng lần huấn luyện | Copy lại đúng checkpoint NB39, NB46 và policy tương ứng; **không sửa hash để bỏ kiểm tra** |
+| Lỗi Java/VnCoreNLP | Thiếu JAR hoặc `models/wordsegmenter`, Java chưa hoạt động | Kiểm tra thư mục `vncorenlp/`, thử lệnh mục 4 |
+| Hết RAM / khởi động rất chậm | XLM-R + PhoBERT chiếm nhiều tài nguyên | Đóng ứng dụng nặng, ưu tiên GPU phù hợp, thử một bình luận trước |
+| Extension không mở/không có Side Panel | Sai thư mục hoặc không có `manifest.json`/`background.js` | Load unpacked đúng `extension/`, bấm **Reload** ở `chrome://extensions` |
+| Extension không kết nối Backend | Backend chưa chạy/port khác/`ready: false` | Thử `http://127.0.0.1:8000/health`, giữ port 8000 |
+| `HTTP 422` | Text rỗng/quá dài, source không hợp lệ, batch quá 30 review | Kiểm tra `/docs` và dữ liệu JSON gửi lên |
+| Thu thập ít review hơn mục tiêu | Bình luận chưa tải, pagination thay đổi, DOM Shopee thay đổi | Chờ tải trang, thử sản phẩm khác; kiểm tra thông tin diagnostics/stop reason |
+| Không có aspect hoặc category không mong muốn | Mô hình không tìm được span hoặc chế độ `unified` dùng hai bộ nhãn | Thử câu đơn giản, nguồn `vicloabsa`/`visd4sa`; không coi dự đoán là gold |
+
+## 10. Giới hạn nghiên cứu và cách trình bày kết quả
+
+- **NB55 DEV**, với source đã biết: Full ABSA F1 **61,708% (Baseline NB39+NB04)** → **62,315% (Proposed NB39+NB46+NB04)**, tăng xấp xỉ **0,608 điểm phần trăm** theo số chưa làm tròn. Đây **không phải** F1 được kiểm chứng cho chế độ local `unified` hoặc dữ liệu Shopee.
+- Một thử nghiệm Shopee trong báo cáo có **100 review, 217 lượt aspect dự đoán**; đó là **thống kê vận hành**, không phải Accuracy hay F1 vì chưa có gold đầy đủ.
+- Chưa có module chuyên biệt để **sửa lỗi chính tả, mở rộng từ viết tắt hoặc khôi phục dấu**. Hệ thống giữ nguyên văn bản gốc để bảo toàn offset. Model có thể khai thác ngữ cảnh nhưng không bảo đảm hiểu đúng mọi cách viết không chuẩn.
+- Khả năng thu thập phụ thuộc quyền truy cập, DOM hiện tại và nội dung hiển thị trên Shopee.
+- Không đưa checkpoint/dữ liệu cá nhân/khóa bí mật vào Git công khai. Việc phân phối trọng số và dữ liệu phải tuân thủ điều kiện sử dụng tương ứng.
+
+---
+
+### Tóm tắt 5 lệnh chạy nhanh (Windows CMD)
+
+Chạy tại **thư mục gốc project**, sau khi đã có đầy đủ source, model và VnCoreNLP:
+
+```bat
+py -3.11 -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install -r backend\requirements.txt
+python -m pip install torch protobuf
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+**Bước tiếp theo:** Mở <http://127.0.0.1:8000/health> (phải có `ready: true`), thử `/predict` trong <http://127.0.0.1:8000/docs>, rồi tải Chrome Extension qua `chrome://extensions`.

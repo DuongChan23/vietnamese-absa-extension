@@ -272,6 +272,7 @@ function renderDashboard(a) {
 }
 
 function aspectsForResult(result) {
+  // Ưu tiên kết quả đã gộp; mảng rỗng vẫn hợp lệ, không lấy lại dự đoán thô.
   if (Array.isArray(result?.aspects_merged)) {
     return result.aspects_merged;
   }
@@ -364,6 +365,8 @@ function renderReviews() {
   // Xử lý cả trường hợp nhiều bình luận trùng văn bản
   const seen = new Map();
 
+  // Ghép theo thứ tự xuất hiện trên toàn bộ danh sách trước khi lọc sao,
+  // để các bình luận trùng nội dung không bị đổi kết quả khi đổi bộ lọc.
   const predictionAtIndex = collectedReviews.map(review => {
     const key = review.text || "";
     const index = seen.get(key) || 0;

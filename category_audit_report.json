@@ -1,0 +1,986 @@
+{
+  "input": {
+    "successful_reviews": 50,
+    "rejected_reviews": 0,
+    "reviews_with_aspects": 48
+  },
+  "counts": {
+    "raw_aspects": 159,
+    "merged_aspects": 125,
+    "removed_duplicates": 34
+  },
+  "raw_categories": {
+    "SER&ACC": 24,
+    "GENERAL": 24,
+    "Service": 23,
+    "General": 22,
+    "DESIGN": 22,
+    "Material": 19,
+    "Design": 12,
+    "Price": 6,
+    "PRICE": 5,
+    "PERFORMANCE": 2
+  },
+  "merged_categories": {
+    "General": 27,
+    "SER&ACC": 24,
+    "Design": 24,
+    "Service": 23,
+    "Material": 19,
+    "Price": 6,
+    "PERFORMANCE": 2
+  },
+  "raw_sentiments": {
+    "positive": 149,
+    "neutral": 2,
+    "negative": 8
+  },
+  "merged_sentiments": {
+    "positive": 116,
+    "neutral": 2,
+    "negative": 7
+  },
+  "categories_by_source": {
+    "SER&ACC": {
+      "visd4sa": 24
+    },
+    "Service": {
+      "vicloabsa": 23
+    },
+    "General": {
+      "visd4sa": 24,
+      "vicloabsa": 22
+    },
+    "Design": {
+      "visd4sa": 22,
+      "vicloabsa": 12
+    },
+    "Material": {
+      "vicloabsa": 19
+    },
+    "Price": {
+      "visd4sa": 5,
+      "vicloabsa": 6
+    },
+    "PERFORMANCE": {
+      "visd4sa": 2
+    }
+  },
+  "same_span_category_pairs": {
+    "SER&ACC | Service": 20,
+    "General | General": 19,
+    "Design | Design": 10,
+    "Price | Price": 5,
+    "Design | Material": 3,
+    "Design | General": 1
+  },
+  "overlapping_span_category_pairs": {
+    "Design | General": 2,
+    "General | Price": 2,
+    "Design | Material": 2,
+    "Design | Design": 1,
+    "SER&ACC | Service": 1,
+    "General | General": 1
+  },
+  "sentiment_conflict_pairs": {},
+  "examples": {
+    "merged_duplicates": [
+      {
+        "review": 1,
+        "text": "Shop tư vấn, phản hồi nhanh, nhiệt tình Hỗ trợ rất tốt. Sản phẩm ok",
+        "aspect": {
+          "start": 56,
+          "end": 67,
+          "aspect": "Sản phẩm ok",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 3,
+        "text": "Thiết kế đẹp, chất lượng tốt, tôn dáng",
+        "aspect": {
+          "start": 0,
+          "end": 12,
+          "aspect": "Thiết kế đẹp",
+          "category": "Design",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "DESIGN",
+            "Design"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 3,
+        "text": "Thiết kế đẹp, chất lượng tốt, tôn dáng",
+        "aspect": {
+          "start": 14,
+          "end": 28,
+          "aspect": "chất lượng tốt",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 4,
+        "text": "Chất vải có vẻ hơi mỏng so với các loại khác nhưng chắc đây là đặc trưng của loại này, loại này bao thoáng mát, ko hầm bí luôn🙂, cạp ôm rất vừa người, vải có vẻ tuy mỏng nhưng đường may rất kỹ. Mong là sẽ dùng được lâu dài",
+        "aspect": {
+          "start": 129,
+          "end": 149,
+          "aspect": "cạp ôm rất vừa người",
+          "category": "Design",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "DESIGN",
+            "Design"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 5,
+        "text": "Rất vừa ý, sẽ quay lại lần sau",
+        "aspect": {
+          "start": 0,
+          "end": 9,
+          "aspect": "Rất vừa ý",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 6,
+        "text": "Shop giao nhanh, đóng gói phù hợp, chất lượng tốt so với giá cả",
+        "aspect": {
+          "start": 35,
+          "end": 63,
+          "aspect": "chất lượng tốt so với giá cả",
+          "category": "Price",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "PRICE",
+            "Price"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 11,
+        "text": "Giao hàng nhanh chóng, chất lượng sản phẩm tốt, tư vấn nhiệt tình, cho shop 5 sao 🎖️🎖️🎖️🏅🏅🏅🥇🥇",
+        "aspect": {
+          "start": 23,
+          "end": 46,
+          "aspect": "chất lượng sản phẩm tốt",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 12,
+        "text": "Êm mềm mại dễ chịu măc thích co giãn tốt giao hàng nhanh. Nên mua mặc loại này thích",
+        "aspect": {
+          "start": 58,
+          "end": 84,
+          "aspect": "Nên mua mặc loại này thích",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 14,
+        "text": "Shop đóng gói cẩn thận, giao hàng khá nhanh, sản phẩm như mô tả, mặc OK",
+        "aspect": {
+          "start": 45,
+          "end": 71,
+          "aspect": "sản phẩm như mô tả, mặc OK",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 16,
+        "text": "Mặc mát vô cùng trời ơi, loại này nên ra sớm hơn mới đúng huhu mình 1m75 90kg mặc size này ok nha mng",
+        "aspect": {
+          "start": 63,
+          "end": 101,
+          "aspect": "mình 1m75 90kg mặc size này ok nha mng",
+          "category": "Design",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "DESIGN",
+            "Design"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 19,
+        "text": "Sản phẩm tốt giao nhanh đóng gói cẩn thận nên mua nha mọi người….",
+        "aspect": {
+          "start": 0,
+          "end": 12,
+          "aspect": "Sản phẩm tốt",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 20,
+        "text": "Sản phẩm dùng tốt, giao hàng nhanh, đóng gói chỉn chu, xứng đáng với giá tiền",
+        "aspect": {
+          "start": 0,
+          "end": 17,
+          "aspect": "Sản phẩm dùng tốt",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 20,
+        "text": "Sản phẩm dùng tốt, giao hàng nhanh, đóng gói chỉn chu, xứng đáng với giá tiền",
+        "aspect": {
+          "start": 55,
+          "end": 77,
+          "aspect": "xứng đáng với giá tiền",
+          "category": "Price",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "PRICE",
+            "Price"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 21,
+        "text": "Tất cả các sản phẩm đồ lót nam của Coolmate thì quá chất lượng và nhiều mẫu mã",
+        "aspect": {
+          "start": 0,
+          "end": 62,
+          "aspect": "Tất cả các sản phẩm đồ lót nam của Coolmate thì quá chất lượng",
+          "category": "General",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "GENERAL",
+            "General"
+          ],
+          "merged_count": 2
+        }
+      },
+      {
+        "review": 21,
+        "text": "Tất cả các sản phẩm đồ lót nam của Coolmate thì quá chất lượng và nhiều mẫu mã",
+        "aspect": {
+          "start": 66,
+          "end": 78,
+          "aspect": "nhiều mẫu mã",
+          "category": "Design",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ],
+          "original_categories": [
+            "DESIGN",
+            "Design"
+          ],
+          "merged_count": 2
+        }
+      }
+    ],
+    "service_pair_same_span": [
+      {
+        "review": 1,
+        "text": "Shop tư vấn, phản hồi nhanh, nhiệt tình Hỗ trợ rất tốt. Sản phẩm ok",
+        "first": {
+          "start": 0,
+          "end": 54,
+          "aspect": "Shop tư vấn, phản hồi nhanh, nhiệt tình Hỗ trợ rất tốt",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 54,
+          "aspect": "Shop tư vấn, phản hồi nhanh, nhiệt tình Hỗ trợ rất tốt",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 6,
+        "text": "Shop giao nhanh, đóng gói phù hợp, chất lượng tốt so với giá cả",
+        "first": {
+          "start": 0,
+          "end": 33,
+          "aspect": "Shop giao nhanh, đóng gói phù hợp",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 33,
+          "aspect": "Shop giao nhanh, đóng gói phù hợp",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 7,
+        "text": "Combo chất lượng. Vải sờ mát, mỏng mặc thoải mái",
+        "first": {
+          "start": 0,
+          "end": 16,
+          "aspect": "Combo chất lượng",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 16,
+          "aspect": "Combo chất lượng",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 12,
+        "text": "Êm mềm mại dễ chịu măc thích co giãn tốt giao hàng nhanh. Nên mua mặc loại này thích",
+        "first": {
+          "start": 41,
+          "end": 56,
+          "aspect": "giao hàng nhanh",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 41,
+          "end": 56,
+          "aspect": "giao hàng nhanh",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 14,
+        "text": "Shop đóng gói cẩn thận, giao hàng khá nhanh, sản phẩm như mô tả, mặc OK",
+        "first": {
+          "start": 0,
+          "end": 43,
+          "aspect": "Shop đóng gói cẩn thận, giao hàng khá nhanh",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 43,
+          "aspect": "Shop đóng gói cẩn thận, giao hàng khá nhanh",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 18,
+        "text": "Shop hỗ trợ đổi trả tốt",
+        "first": {
+          "start": 0,
+          "end": 23,
+          "aspect": "Shop hỗ trợ đổi trả tốt",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 23,
+          "aspect": "Shop hỗ trợ đổi trả tốt",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 19,
+        "text": "Sản phẩm tốt giao nhanh đóng gói cẩn thận nên mua nha mọi người….",
+        "first": {
+          "start": 13,
+          "end": 41,
+          "aspect": "giao nhanh đóng gói cẩn thận",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 13,
+          "end": 41,
+          "aspect": "giao nhanh đóng gói cẩn thận",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 20,
+        "text": "Sản phẩm dùng tốt, giao hàng nhanh, đóng gói chỉn chu, xứng đáng với giá tiền",
+        "first": {
+          "start": 19,
+          "end": 53,
+          "aspect": "giao hàng nhanh, đóng gói chỉn chu",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 19,
+          "end": 53,
+          "aspect": "giao hàng nhanh, đóng gói chỉn chu",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 24,
+        "text": "Hàng đẹp, chất lượng tốt, giá hợp lý. Shop tư vấn nhiệt tình, giao hàng siêu tốc. Rất hài lòng!",
+        "first": {
+          "start": 38,
+          "end": 80,
+          "aspect": "Shop tư vấn nhiệt tình, giao hàng siêu tốc",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 38,
+          "end": 80,
+          "aspect": "Shop tư vấn nhiệt tình, giao hàng siêu tốc",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 26,
+        "text": "Giao hàng nhanh đóng gói ổn",
+        "first": {
+          "start": 0,
+          "end": 27,
+          "aspect": "Giao hàng nhanh đóng gói ổn",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 0,
+          "end": 27,
+          "aspect": "Giao hàng nhanh đóng gói ổn",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 27,
+        "text": "Quần mặc thoáng mát nhưng phần quà làm trải nghiệm tệ",
+        "first": {
+          "start": 20,
+          "end": 53,
+          "aspect": "nhưng phần quà làm trải nghiệm tệ",
+          "category": "SER&ACC",
+          "sentiment": "negative",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 20,
+          "end": 53,
+          "aspect": "nhưng phần quà làm trải nghiệm tệ",
+          "category": "Service",
+          "sentiment": "negative",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 30,
+        "text": "Combo 3 quần lót coolmate chất lượng ok giá tốt, giao nhanh",
+        "first": {
+          "start": 49,
+          "end": 59,
+          "aspect": "giao nhanh",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 49,
+          "end": 59,
+          "aspect": "giao nhanh",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 31,
+        "text": "Sản phẩm chất liệu tốt. Đáng tin cậy, tư vấn nhiệt tình rất đáng mua",
+        "first": {
+          "start": 24,
+          "end": 55,
+          "aspect": "Đáng tin cậy, tư vấn nhiệt tình",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 24,
+          "end": 55,
+          "aspect": "Đáng tin cậy, tư vấn nhiệt tình",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 33,
+        "text": "Sản phẩm tốt nhưng tặng quà kỳ quá tặng 3XL ai bận trời hơi khó chịu 1 chút",
+        "first": {
+          "start": 19,
+          "end": 75,
+          "aspect": "tặng quà kỳ quá tặng 3XL ai bận trời hơi khó chịu 1 chút",
+          "category": "SER&ACC",
+          "sentiment": "negative",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 19,
+          "end": 75,
+          "aspect": "tặng quà kỳ quá tặng 3XL ai bận trời hơi khó chịu 1 chút",
+          "category": "Service",
+          "sentiment": "negative",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      },
+      {
+        "review": 36,
+        "text": "Chất lượng sản phẩm tuyệt vời shop giao hàng nhanh chóng đầy đủ các loại đã đặt ra",
+        "first": {
+          "start": 30,
+          "end": 82,
+          "aspect": "shop giao hàng nhanh chóng đầy đủ các loại đã đặt ra",
+          "category": "SER&ACC",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        },
+        "second": {
+          "start": 30,
+          "end": 82,
+          "aspect": "shop giao hàng nhanh chóng đầy đủ các loại đã đặt ra",
+          "category": "Service",
+          "sentiment": "positive",
+          "sources": [
+            "vicloabsa"
+          ]
+        }
+      }
+    ],
+    "sentiment_conflicts": [],
+    "suspicious_categories": [
+      {
+        "review": 34,
+        "text": "Nail nhũ ẩn lấp lánh kiêu sa, tạo hiệu ứng bling bling siêu thu hút",
+        "prediction": {
+          "start": 30,
+          "end": 67,
+          "aspect": "tạo hiệu ứng bling bling siêu thu hút",
+          "category": "PERFORMANCE",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        }
+      },
+      {
+        "review": 44,
+        "text": "Sản phẩm thật tuyệt vời, chất lượng đỉnh cao, thiết kế tinh tế. Trải nghiệm sử dụng mượt mà, rất đáng tiền!",
+        "prediction": {
+          "start": 64,
+          "end": 91,
+          "aspect": "Trải nghiệm sử dụng mượt mà",
+          "category": "PERFORMANCE",
+          "sentiment": "positive",
+          "sources": [
+            "visd4sa"
+          ]
+        }
+      }
+    ],
+    "missing_offsets": [],
+    "lost_sources": [
+      {
+        "review": 1,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 3,
+        "category": "Design",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 3,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 4,
+        "category": "Design",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 5,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 6,
+        "category": "Price",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 11,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 12,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 14,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 16,
+        "category": "Design",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 19,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 20,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 20,
+        "category": "Price",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 21,
+        "category": "General",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      },
+      {
+        "review": 21,
+        "category": "Design",
+        "missing_sources": [
+          "vicloabsa"
+        ],
+        "expected_sources": [
+          "vicloabsa",
+          "visd4sa"
+        ],
+        "actual_sources": [
+          "visd4sa"
+        ]
+      }
+    ]
+  },
+  "warnings": {
+    "missing_offsets": 0,
+    "suspicious_predictions": 2,
+    "lost_source_attribution": 34
+  }
+}

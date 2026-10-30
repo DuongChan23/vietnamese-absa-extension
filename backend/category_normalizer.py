@@ -113,6 +113,7 @@ def merge_aspects(
         start = item.get("start")
         end = item.get("end")
 
+        # Dùng type(...) is int để loại cả bool (vốn là lớp con của int trong Python).
         valid_span = (
             type(start) is int
             and type(end) is int
@@ -124,6 +125,7 @@ def merge_aspects(
             merged.append(item)
             continue
 
+        # Giữ riêng các dự đoán khác cảm xúc, kể cả khi cùng vị trí và category.
         key = (
             start,
             end,
@@ -140,6 +142,7 @@ def merge_aspects(
 
         previous["merged_count"] += 1
 
+        # Gộp nguồn và nhãn gốc để vẫn truy vết được các dự đoán trước chuẩn hóa.
         previous["sources"] = merge_unique(
             previous.get("sources", []),
             sources,
