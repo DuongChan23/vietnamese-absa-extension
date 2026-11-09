@@ -1,22 +1,30 @@
 
-(async () => {
+(() => {
+  // The collector runs in the page. Return an acknowledgement immediately so
+  // collecting many pages does not depend on one long-lived worker message.
+  const completionRunId = document.documentElement.dataset.absaCollectionRun;
+  const completionProductId = document.documentElement.dataset.absaExpectedProduct;
+  const completionStarted = performance.now();
+  const task = (async () => {
   "use strict";
 
   // =====================================================
   // 1. CONFIGURATION
   // =====================================================
 
-  const requested = Number(
-    document.documentElement.dataset.absaReviewLimit
-  );
+  const rawLimit = document.documentElement.dataset.absaReviewLimit;
+  const requested = Number(rawLimit);
+  const COLLECT_ALL = rawLimit === "all";
+  const runId = document.documentElement.dataset.absaCollectionRun;
+  const collectionStarted = performance.now();
 
   delete document.documentElement.dataset.absaReviewLimit;
 
-  const TARGET_REVIEWS = [50, 100, 200].includes(requested)
+  const TARGET_REVIEWS = COLLECT_ALL ? Infinity : [50, 100, 200].includes(requested)
     ? requested
     : 50;
 
-  const MAX_PAGES = 65;
+  const MAX_PAGES = COLLECT_ALL ? Infinity : 65;
   const PAGE_WAIT_MS = 10000;
 
   const sleep = ms =>
@@ -35,7 +43,10 @@
 
   const productMatch = url.pathname.match(
     /-i\.(\d+)\.(\d+)(?:\/|$)/
-  );
+  ) || url.pathname.match(/^\/product\/(\d+)\/(\d+)(?:\/|$)/) ||
+    (/^\d+$/.test(url.searchParams.get("shopid") || "") &&
+     /^\d+$/.test(url.searchParams.get("itemid") || "")
+      ? ["", url.searchParams.get("shopid"), url.searchParams.get("itemid")] : null);
 
   if (
     !/(^|\.)shopee\.vn$/i.test(url.hostname) ||
@@ -50,9 +61,25 @@
   const productId =
     `${productMatch[1]}.${productMatch[2]}`;
 
+  function assertCurrentCollection() {
+    const current = new URL(location.href);
+    const match = current.pathname.match(/-i\.(\d+)\.(\d+)(?:\/|$)/) ||
+      current.pathname.match(/^\/product\/(\d+)\/(\d+)(?:\/|$)/);
+    const id = match ? `${match[1]}.${match[2]}` :
+      `${current.searchParams.get("shopid")}.${current.searchParams.get("itemid")}`;
+    if (id !== productId || (runId &&
+        document.documentElement.dataset.absaCollectionRun !== runId) ||
+        (document.documentElement.dataset.absaExpectedProduct &&
+         document.documentElement.dataset.absaExpectedProduct !== productId)) {
+      throw new Error("collection_cancelled_or_product_changed");
+    }
+  }
+  assertCurrentCollection();
+
   const reviews = [];
   const seenKeys = new Set();
   const diagnostics = [];
+  let reviewRoot = document;
 
   // =====================================================
   // 2. DOM HELPERS
@@ -99,108 +126,8 @@
   // 3. EXTRACT COMMENT
   // =====================================================
 
-  const CONTENT_SELECTORS = [
-    ".shopee-product-rating__content--original",
-    ".shopee-product-rating__content",
-    '[data-testid="review-content"]',
-    '[data-testid="rating-content"]'
-  ];
-
-  function stripSellerReply(value) {
-    return String(value ?? "").split(
-      /Phản Hồi Của Người Bán|Phản Hồi Từ Người Bán/i
-    )[0];
-  }
-
   function extractText(card) {
-    // Ưu tiên phần tử nội dung nếu Shopee cung cấp.
-    for (const selector of CONTENT_SELECTORS) {
-      const element = card.querySelector(selector);
-
-      if (!element || !visible(element)) continue;
-
-      const value = clean(
-        stripSellerReply(rawText(element))
-      );
-
-      if (
-        value.length >= 3 &&
-        value.length <= 3000
-      ) {
-        return value;
-      }
-    }
-
-    // Fallback cho giao diện Shopee hiện tại.
-    const fullText = rawText(card);
-    const match = DATE_REGEX.exec(fullText);
-
-    if (!match) return null;
-
-    // Lấy phần văn bản nằm sau ngày đánh giá.
-    const afterDate = fullText.slice(
-      match.index + match[0].length
-    );
-
-    const lines = stripSellerReply(afterDate)
-      .split(/\n+/)
-      .map(clean)
-      .filter(Boolean);
-
-    const content = [];
-
-    for (const originalLine of lines) {
-      let line = originalLine;
-
-      // Bỏ thông tin phân loại gắn cùng ngày đăng.
-      line = line.replace(
-        /^\s*[\|\-]?\s*Phân loại hàng\s*:[^\n]*/i,
-        ""
-      ).trim();
-
-      if (!line) continue;
-
-      // Phản hồi người bán không phải bình luận
-      // của khách hàng.
-      if (
-        /^(phản hồi của người bán|phản hồi từ người bán|hữu ích|báo cáo|trả lời|shop phản hồi)/i
-          .test(line)
-      ) {
-        break;
-      }
-
-      // Bỏ các dòng metadata sản phẩm.
-      if (
-        /^(phân loại hàng|màu sắc|chất liệu|đúng với mô tả|thiết kế|kích cỡ|size|mát)\s*:/i
-          .test(line)
-      ) {
-        continue;
-      }
-
-      if (
-        /^\d+:\d{2}$/.test(line) ||
-        /^xem thêm$/i.test(line) ||
-        /^\d+\s*(thích|hữu ích|lượt thích)$/i.test(line)
-      ) {
-        continue;
-      }
-
-      // Giữ cả bình luận ngắn: "ok", "tốt"...
-      if (line.length < 2) continue;
-
-      content.push(line);
-    }
-
-    const result = clean(content.join(" "));
-
-    if (
-      result.length < 2 ||
-      result.length > 3000
-    ) {
-      return null;
-    }
-
-    return result;
+    return globalThis.__absaReviewHelpers.extractBuyerComment(card);
   }
 
   // =====================================================
@@ -214,7 +141,7 @@
 
   function findReviewCards() {
     const rows = [
-      ...document.querySelectorAll(".d72He7")
+      ...reviewRoot.querySelectorAll(".d72He7")
     ].filter(visible);
 
     const cards = [];
@@ -252,8 +179,7 @@
 
           if (
             extracted &&
-            extracted.length >= 2 &&
-            trimmed.length >= 35
+            extracted.length > 0
           ) {
             selected = current;
             break;
@@ -273,7 +199,7 @@
     // Fallback khi Shopee đổi class .d72He7.
     if (!cards.length) {
       const dateElements = [
-        ...document.querySelectorAll(
+        ...reviewRoot.querySelectorAll(
           "div,span,time"
         )
       ].filter(element => {
@@ -609,7 +535,7 @@
       added++;
     }
 
-    diagnostics.push({
+    const pageStats = {
       page,
       cards_found: cards.length,
       added,
@@ -618,7 +544,16 @@
       rating_unknown: unknownRatings,
       total_collected: reviews.length,
       preview
-    });
+    };
+    diagnostics.push(pageStats);
+    if (runId) {
+      void chrome.runtime.sendMessage({
+        type: "ABSA_COLLECTION_PROGRESS", run_id: runId, product_id: productId,
+        duration_ms: performance.now() - collectionStarted,
+        stats: { page, collected: reviews.length, added, skipped_empty: skippedEmpty,
+          skipped_duplicate: skippedDuplicate, cards_found: cards.length }
+      }).catch(() => {});
+    }
 
     return {
       cardsFound: cards.length,
@@ -630,24 +565,44 @@
   // 9. PAGINATION
   // =====================================================
 
-  function findNextButton() {
-    const selectors = [
-      ".shopee-icon-button--right",
-      '[aria-label="Next"]',
-      '[aria-label="Trang sau"]',
+  function isDisabled(button) {
+    return button.disabled || button.getAttribute('disabled') !== null ||
+      button.getAttribute("aria-disabled") === "true" ||
+      button.classList.contains("shopee-icon-button--disabled") ||
+      button.classList.contains('disabled') ||
+      getComputedStyle(button).pointerEvents === 'none';
+  }
+
+  function paginationState() {
+    const buttons = [...reviewRoot.querySelectorAll('.shopee-page-controller button')]
+      .filter(button => visible(button) && /^\d+$/.test(clean(button.textContent)));
+    const active = buttons.find(button =>
+      ['page', 'true'].includes(button.getAttribute('aria-current')) ||
+      button.getAttribute('aria-selected') === 'true' ||
+      button.classList.contains('shopee-button-solid--primary') ||
+      button.classList.contains('shopee-button-no-outline--primary'));
+    return {
+      page: active ? Number(clean(active.textContent)) : null,
+      firstButton: buttons.find(button => clean(button.textContent) === '1')
+    };
+  }
+
+  function findNavigationButton(direction) {
+    const selectors = direction === "next" ? [
+      ".shopee-page-controller .shopee-icon-button--right",
+      '[aria-label="Next"]', '[aria-label="Trang sau"]',
       'button[aria-label*="next" i]'
+    ] : [
+      ".shopee-page-controller .shopee-icon-button--left",
+      '[aria-label="Previous"]', '[aria-label="Trang trước"]',
+      'button[aria-label*="previous" i]'
     ];
 
     for (const selector of selectors) {
       const button = [
-        ...document.querySelectorAll(selector)
+        ...reviewRoot.querySelectorAll(selector)
       ].find(element =>
-        visible(element) &&
-        !element.disabled &&
-        element.getAttribute("aria-disabled") !== "true" &&
-        !element.classList.contains(
-          "shopee-icon-button--disabled"
-        )
+        visible(element)
       );
 
       if (button) return button;
@@ -656,19 +611,33 @@
     return null;
   }
 
-  async function waitForPageChange(previous) {
+  async function waitForPageChange(previous, { fromPage = null, expectedPage = null, filterSelected = null } = {}) {
     const deadline = Date.now() + PAGE_WAIT_MS;
+    let stableSignature = null;
+    let stableSince = 0;
 
     while (Date.now() < deadline) {
       await sleep(350);
+      assertCurrentCollection();
 
       const current = pageSignature();
+      const page = paginationState().page;
+      const reachedPage = expectedPage !== null && page === expectedPage;
+
+      // A click on page 1 while already there legitimately leaves content
+      // unchanged. Page markers also disambiguate pages with identical text.
+      if (reachedPage && fromPage === expectedPage) return true;
+      if (current !== stableSignature) {
+        stableSignature = current;
+        stableSince = Date.now();
+      }
 
       if (
-        current &&
-        current !== previous
+        ((current && current !== previous) || reachedPage || filterSelected?.()) &&
+        Date.now() - stableSince >= 700
       ) {
         await sleep(500);
+        assertCurrentCollection();
         return true;
       }
     }
@@ -689,23 +658,105 @@
     };
   }
 
+  reviewRoot = heading.closest(
+    '.product-ratings, .shopee-product-ratings, [data-testid="product-ratings"]'
+  );
+  if (!reviewRoot) {
+    let ancestor = heading.parentElement;
+    while (ancestor && ancestor !== document.body) {
+      if (ancestor.querySelector('.shopee-page-controller')) {
+        reviewRoot = ancestor;
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+  }
+  reviewRoot ||= heading.closest("section") || heading.parentElement;
+
   heading.scrollIntoView({
     behavior: "instant",
     block: "start"
   });
 
   await sleep(1200);
+  assertCurrentCollection();
+
+  // Prefer Shopee's written-comment filter to avoid paging through ratings
+  // without text. If absent, scan all ratings and reject empty cards locally.
+  const filters = [...reviewRoot.querySelectorAll(
+    '.product-rating-overview__filter, [data-testid="rating-filter"], button'
+  )];
+  const allFilter = filters.find(button => visible(button) &&
+    /^tất cả(?:\s*\(|$)/i.test(clean(button.textContent)));
+  const commentFilter = filters.find(button => visible(button) &&
+    /^có\s+(?:bình luận|nội dung)(?:\s*\(|$)/i.test(clean(button.textContent)));
+  const isFilterSelected = button => button.classList.contains('product-rating-overview__filter--active') ||
+    button.getAttribute('aria-pressed') === 'true';
+
+  // Restore the overall view before reading native totals, including when a
+  // previous run left "Có bình luận" or a single-star filter selected.
+  if (allFilter && !isFilterSelected(allFilter)) {
+    const previous = pageSignature();
+    allFilter.click();
+    await waitForPageChange(previous, { filterSelected: () => isFilterSelected(allFilter) });
+    assertCurrentCollection();
+  }
+  const ratingSummary = globalThis.__absaReviewHelpers.readShopeeRatingSummary(reviewRoot);
+  const chosenFilter = commentFilter || allFilter;
+  if (COLLECT_ALL && !chosenFilter) {
+    return { ok: false, error: 'all_rating_filter_not_found' };
+  }
+  if (chosenFilter && !isFilterSelected(chosenFilter)) {
+    const previous = pageSignature();
+    chosenFilter.click();
+    await waitForPageChange(previous, { filterSelected: () => isFilterSelected(chosenFilter) });
+    assertCurrentCollection();
+  }
+
+  const resetSignatures = new Set();
+  while (true) {
+    assertCurrentCollection();
+    const previousButton = findNavigationButton('previous');
+    const state = paginationState();
+    // The selected page is authoritative. Some Shopee arrow elements appear
+    // enabled even on page 1, so their DOM property alone cannot drive reset.
+    if (state.page === 1) break;
+    const previousEnabled = previousButton && !isDisabled(previousButton);
+    if (!previousEnabled && state.page === null) break;
+    const signature = pageSignature();
+    const resetKey = `${state.page ?? '?'}:${signature}`;
+    if (resetSignatures.has(resetKey)) {
+      return { ok: false, error: 'first_page_not_confirmed' };
+    }
+    resetSignatures.add(resetKey);
+    const resetButton = state.firstButton || (previousEnabled ? previousButton : null);
+    if (!resetButton) return { ok: false, error: 'first_page_not_confirmed' };
+    resetButton.click();
+    const expectedPage = state.firstButton ? 1 : state.page !== null ? state.page - 1 : null;
+    if (!await waitForPageChange(signature, { fromPage: state.page, expectedPage })) {
+      return { ok: false, error: 'first_page_not_confirmed' };
+    }
+  }
 
   let pagesChecked = 0;
   let stopReason = "max_pages_reached";
-  let consecutiveNoNew = 0;
+  const visitedPages = new Set();
 
   for (
     let page = 1;
     page <= MAX_PAGES;
     page++
   ) {
-    const result = collectCurrentPage(page);
+    assertCurrentCollection();
+    const signature = pageSignature();
+    const currentPage = paginationState().page;
+    const pageKey = currentPage !== null ? `page:${currentPage}` : signature;
+    if (pageKey && visitedPages.has(pageKey)) {
+      stopReason = 'repeated_page';
+      break;
+    }
+    if (pageKey) visitedPages.add(pageKey);
+    collectCurrentPage(page);
 
     pagesChecked++;
 
@@ -714,42 +765,32 @@
       break;
     }
 
-    if (result.cardsFound === 0) {
-      stopReason = "no_review_cards";
-      break;
-    }
-
-    if (result.added === 0) {
-      consecutiveNoNew++;
-    } else {
-      consecutiveNoNew = 0;
-    }
-
-    // Dừng sớm nếu không lấy được bình luận,
-    // tránh chạy hết 65 trang vô ích.
-    if (consecutiveNoNew >= 2) {
-      stopReason = "two_pages_without_new_reviews";
-      break;
-    }
+    // Empty/star-only pages do not imply that later pages have no comments.
 
     if (page >= MAX_PAGES) {
       stopReason = "max_pages_reached";
       break;
     }
 
-    const nextButton = findNextButton();
+    const nextButton = findNavigationButton('next');
 
     if (!nextButton) {
-      stopReason = "next_button_not_found";
+      stopReason = "pagination_end_or_unavailable";
+      break;
+    }
+    if (isDisabled(nextButton)) {
+      stopReason = 'end_of_reviews';
       break;
     }
 
     const previous = pageSignature();
 
+    assertCurrentCollection();
     nextButton.click();
 
     const changed = await waitForPageChange(
-      previous
+      previous,
+      { fromPage: currentPage, expectedPage: currentPage !== null ? currentPage + 1 : null }
     );
 
     if (!changed) {
@@ -757,6 +798,7 @@
       break;
     }
   }
+  assertCurrentCollection();
 
   // =====================================================
   // 11. FINAL RESULT
@@ -790,22 +832,36 @@
     platform: "shopee",
 
     product_id: productId,
+    run_id: runId || null,
     url: `${url.origin}${url.pathname}`,
 
     reviews,
+    rating_summary: ratingSummary,
 
     stats: {
-      target: TARGET_REVIEWS,
+      target: COLLECT_ALL ? null : TARGET_REVIEWS,
       found: reviews.length,
       returned: reviews.length,
       pages_checked: pagesChecked,
-      max_pages: MAX_PAGES,
-      collection_mode: "all_filter_dom_order",
-      star_distribution: starDistribution,
+      max_pages: COLLECT_ALL ? null : MAX_PAGES,
+      collection_mode: COLLECT_ALL ? "all_available_comment_pages" : "comment_pages_until_target",
+      review_filter: commentFilter ? 'with_comments' : 'all',
+      duration_ms: performance.now() - collectionStarted,
+      comment_star_distribution: starDistribution,
+      skipped_without_comment: diagnostics.reduce((sum, page) => sum + page.skipped_empty, 0),
       stop_reason: stopReason
     },
 
     diagnostics,
     collected_at: new Date().toISOString()
   };
+  })();
+  const sendResult = data => {
+    void chrome.runtime.sendMessage({
+      type: 'ABSA_COLLECTION_DONE', run_id: completionRunId,
+      product_id: completionProductId, duration_ms: performance.now() - completionStarted, data
+    }).catch(() => {});
+  };
+  void task.then(sendResult, error => sendResult({ ok: false, error: error.message }));
+  return { ok: true, started: true, run_id: completionRunId };
 })()

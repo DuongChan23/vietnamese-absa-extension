@@ -240,13 +240,58 @@ Invoke-RestMethod `
 ### Cách B — Demo theo một sản phẩm Shopee
 
 - Nhấn **Lấy thông tin sản phẩm Shopee** để xem thông tin sản phẩm khi collector đọc được từ trang.
-- Chọn mục tiêu **50 / 100 / 200 bình luận**.
+- Side Panel tự tải sản phẩm đang mở khi đổi URL hoặc tab; dữ liệu phân tích của sản phẩm trước được xóa. Tác vụ cũ bị dừng ở Extension và phản hồi trả về muộn được bỏ qua.
+- Chọn mục tiêu **50 / 100 / 200 / Tất cả bình luận có nội dung**. Collector ưu tiên bộ lọc **Có bình luận/Có nội dung** của Shopee, quay về trang đầu và chỉ nhận lời bình của người mua. Nếu không có bộ lọc này, collector duyệt các đánh giá rồi bỏ các thẻ chỉ chấm sao, thông tin phân loại, nút hữu ích và phản hồi người bán. “Tất cả” đi đến trang cuối tải được, không giới hạn ở 65 trang.
 - Nhấn **Lấy bình luận Shopee** và xem số review thực tế thu thập được, số sao, lý do dừng.
 - Nhấn **Phân tích tất cả bình luận đã lấy**.
 - Theo dõi tiến độ các batch, thống kê category/sentiment, xem danh sách review.
 - Nếu giao diện hiện các nút xuất, dùng **Xuất JSON / Xuất CSV** để lưu dữ liệu thử nghiệm.
 
 **Lưu ý về collector:** Đọc bình luận từ **DOM đang hiển thị** trên trang Shopee và tùy trạng thái tải trang/phân trang. Không bảo đảm thu đủ 50/100/200 bình luận với mọi sản phẩm; không sử dụng để vượt quyền truy cập hoặc cơ chế bảo vệ của website. Đây là prototype, không phải dịch vụ scraping độc lập đã kiểm thử trên mọi thay đổi giao diện Shopee.
+
+Nút **Dừng xử lý** hủy thu thập/chặn các batch kế tiếp. Request model đã gửi có
+thể tiếp tục hoàn tất ở Backend; kết quả của lượt đã hủy không được hiển thị.
+Nếu phân trang không tải, bị lặp hoặc không đọc được nút trang sau, giao diện
+hiển thị số bình luận thực lấy và lý do dừng thay vì khẳng định đã lấy đủ tất cả.
+
+Các mức 50/100/200 đếm **lời bình hợp lệ**, không đếm đánh giá chỉ có sao. Bình
+luận ngắn như “ok”, “tốt” và emoji vẫn được giữ; thẻ không có lời bình không
+được gửi vào model. Collector không dừng chỉ vì gặp hai trang không có chữ.
+
+Phần **Số sao trên Shopee** lấy điểm trung bình và số lượng từng mức sao từ
+thông tin/bộ lọc Shopee hiển thị, bao gồm cả đánh giá không viết lời bình.
+Không tính lại biểu đồ này từ mẫu bình luận được chọn để phân tích. Nếu Shopee
+chưa hiển thị đủ số liệu, giao diện để trống phần chưa đọc được; các số dạng
+`2,4k` được đánh dấu là gần đúng. Số sao trên từng lời bình vẫn giữ để lọc
+danh sách 1–5 sao. Nếu không lấy được lời bình nào, model không chạy nhưng
+giao diện vẫn hiển thị số sao Shopee đọc được.
+
+Backend ghi mốc thời gian vào **`logs/activity.jsonl`** (mỗi dòng là một JSON).
+File được xoay vòng ở 10 MiB, giữ thêm 3 bản. Log gồm đổi sản phẩm, bắt đầu/kết
+thúc thu thập, tiến độ từng trang, từng batch, từng review, thời gian trích xuất
+khía cạnh và phân loại cảm xúc theo source, cache hit, lỗi và hủy tác vụ. Các
+mốc được nối bằng `run_id`, `product_id` và `batch_id` khi có; không ghi nội
+dung review. `duration_ms` dùng đồng hồ đo thời gian thực thi; timestamp dùng
+ISO 8601 UTC. Với sự kiện `collection_page`, duration là thời gian cộng dồn
+từ lúc bắt đầu collector. Extension kiểm tra khả năng ghi log qua `/health`
+và danh sách route trước khi gửi. Nếu Backend còn là bản cũ hoặc mất kết nối,
+log được lưu tạm trong `chrome.storage.local` (tối đa 5.000 mốc gần nhất),
+không gửi lặp vào route 404. Khi Backend kết nối lại, các mốc được gửi theo
+lô tới `POST /activity/log/batch`, giữ `client_time` gốc và mã sự kiện để truy
+vết. Side Panel hiển thị thông báo nếu cần khởi động lại Backend để ghi file.
+Việc kiểm tra lại thực hiện tối đa mỗi 30 giây, hoặc ngay khi mở Side Panel.
+
+Theo dõi log trong PowerShell:
+
+```powershell
+Get-Content .\logs\activity.jsonl -Tail 30 -Wait
+```
+
+Sau khi cập nhật code, khởi động lại Backend và nhấn **Reload** cho Extension
+trong `chrome://extensions`, sau đó đóng/mở lại Side Panel.
+Với bản hiện tại, `/health` cần có `"api_version": "0.3.1"` và trường
+`activity_log`. Nếu chưa có, tiến trình cổng 8000 vẫn đang chạy code cũ hoặc
+được khởi động từ thư mục khác.
 
 ## 8. Tự kiểm tra trước buổi demo
 
@@ -269,6 +314,42 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 Kiểm thử preprocessing/normalizer chỉ kiểm tra **logic phần mềm**, không thay thế đánh giá F1 của mô hình AI.
+
+Kiểm thử Extension (Node.js, không cài thêm package):
+
+```bat
+node --test tests/extension_context.test.mjs tests/extension_collector.test.mjs tests/extension_batch.test.mjs tests/extension_panel.test.mjs tests/extension_product.test.mjs tests/extension_activity.test.mjs tests/extension_review_helpers.test.mjs
+```
+
+### Kiểm tra tối ưu suy luận và đối chiếu kết quả
+
+Backend tái sử dụng sentiment cho cùng một span trong cùng review khi chạy hai
+source ở chế độ `unified`. Trong mỗi request batch, các review có text giống hệt
+nhau cũng dùng lại dự đoán, nhưng vẫn giữ từng review, ID, số sao và thứ tự.
+Text không được chuẩn hóa để làm khóa cache; các chuỗi khác khoảng trắng vẫn
+được suy luận riêng. Cache không được giữ giữa các request và lỗi không được
+cache. Checkpoint, 15 category, ngưỡng 0,85 và phép tính của các model giữ nguyên.
+
+Trên môi trường đã cài đủ thư viện và nạp được model, chạy từ thư mục gốc:
+
+```bat
+python -m backend.benchmark_inference tests/fixtures/inference_reviews.json --repeats 2
+python -m backend.benchmark_inference reviews.csv --limit 10 --repeats 2
+```
+
+Công cụ so sánh đường suy luận ban đầu (không tái sử dụng giữa source/review)
+với đường đã tối ưu, bao gồm toàn bộ `aspects` và `aspects_merged`, thứ tự,
+offset, category, sentiment và nguồn. Kết quả cần có `outputs_equal: true`;
+nếu khác, công cụ trả mã thoát 1 và liệt kê index review khác nhau. Thời gian
+không gồm nạp checkpoint, có warmup và đồng bộ CUDA khi dùng GPU. File mẫu
+chỉ kiểm tra tính tương đương, không chứa nhãn gold để đo độ chính xác.
+
+`speedup` phụ thuộc số review trùng và số span trùng giữa hai source. Với các
+review hoàn toàn khác nhau, số lượt XLM-R vẫn là tối đa 15/review. Khi gọi từ
+extension, cache chỉ có hiệu lực trong từng lô 10 review. Benchmark mô phỏng một
+request tối đa 30 review; dùng `--limit 10` để đối chiếu với kích thước lô của
+extension. Chưa thay đổi precision hay gộp tensor thành batch vì cần đối chiếu
+đầu ra trên checkpoint thật trước khi áp dụng các thay đổi số học đó.
 
 ## 9. Xử lý lỗi thường gặp
 

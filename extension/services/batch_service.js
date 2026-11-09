@@ -1,6 +1,8 @@
 
 "use strict";
 
+import { logActivity } from "./activity_service.js";
+
 const API_URL = "http://127.0.0.1:8000";
 const BATCH_SIZE = 10;
 
@@ -11,7 +13,8 @@ const BATCH_SIZE = 10;
 export async function analyzeReviewBatch(
   reviews,
   productId,
-  onProgress = () => {}
+  onProgress = () => {},
+  { signal, runId } = {}
 ) {
   if (!Array.isArray(reviews) || reviews.length === 0) {
     throw new Error("Chưa có bình luận để phân tích.");
@@ -22,12 +25,20 @@ export async function analyzeReviewBatch(
   const total = reviews.length;
   let processed = 0;
   let batchError = null;
+  const context = { runId, productId };
 
   for (let start = 0; start < total; start += BATCH_SIZE) {
+    signal?.throwIfAborted();
     const batch = reviews.slice(start, start + BATCH_SIZE);
+    const started = performance.now();
+    const batchNumber = Math.floor(start / BATCH_SIZE) + 1;
+    void logActivity("analysis_batch_started", context, {
+      batch: batchNumber, reviews: batch.length
+    });
 
     const payload = {
       source: "unified",
+      run_id: runId || null,
       product_id: productId || null,
       reviews: batch.map((item) => ({
         review_id: item.review_id ?? null,
@@ -43,6 +54,7 @@ export async function analyzeReviewBatch(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        signal,
       });
 
       if (!response.ok) {
@@ -53,6 +65,7 @@ export async function analyzeReviewBatch(
       }
 
       const data = await response.json();
+      signal?.throwIfAborted();
 
       if (!Array.isArray(data.results)) {
         throw new Error("API không trả về danh sách kết quả hợp lệ.");
@@ -70,6 +83,10 @@ export async function analyzeReviewBatch(
       }
 
       processed += batch.length;
+      void logActivity("analysis_batch_completed", context, {
+        batch: batchNumber, submitted: batch.length,
+        completed: data.results.filter(row => row.status === "ok").length
+      }, performance.now() - started);
 
       onProgress({
         processed,
@@ -79,6 +96,10 @@ export async function analyzeReviewBatch(
       });
 
     } catch (error) {
+      if (signal?.aborted || error.name === "AbortError") throw error;
+      void logActivity("analysis_batch_failed", context, {
+        batch: batchNumber, error_type: error.name || "Error"
+      }, performance.now() - started);
       batchError = error.message;
       break;
     }

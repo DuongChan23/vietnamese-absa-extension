@@ -1,0 +1,10 @@
+[
+  {"review_id": "r1", "text": "Màn hình đẹp nhưng pin tụt nhanh.", "rating": 3},
+  {"review_id": "r2", "text": "Áo đẹp nhưng chất vải hơi mỏng, giao hàng nhanh.", "rating": 4},
+  {"review_id": "r3", "text": "Màn hình đẹp nhưng pin tụt nhanh.", "rating": 4},
+  {"review_id": "r4", "text": "Giá hợp lý, đóng gói cẩn thận.", "rating": 5},
+  {"review_id": "r5", "text": "  Giá  hợp lý, đóng gói cẩn thận. ", "rating": 5},
+  {"review_id": "r6", "text": "Camera chụp đẹp, máy chạy mượt nhưng hơi nóng.", "rating": 4},
+  {"review_id": "r7", "text": "Áo đẹp nhưng chất vải hơi mỏng, giao hàng nhanh.", "rating": 2},
+  {"review_id": "r8", "text": "Shop giao sai màu, đổi hàng chậm.", "rating": 1}
+]

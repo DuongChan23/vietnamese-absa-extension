@@ -49,27 +49,6 @@ function percent(value, total) {
     : 0;
 }
 
-function validRating(value) {
-  // null and empty strings must not become 0.
-  if (
-    value === null ||
-    value === undefined ||
-    String(value).trim() === ""
-  ) {
-    return null;
-  }
-
-  const n = Number(value);
-
-  return (
-    Number.isInteger(n) &&
-    n >= 1 &&
-    n <= 5
-  )
-    ? n
-    : null;
-}
-
 // ============================================================
 // 2. SELECT ASPECT PREDICTIONS
 // ============================================================
@@ -112,7 +91,8 @@ function selectAspects(prediction) {
  */
 export function buildAnalytics(
   batchResult,
-  collectedReviews
+  collectedReviews,
+  shopeeRatings = null
 ) {
   const predictions = Array.isArray(batchResult?.results)
     ? batchResult.results
@@ -249,39 +229,21 @@ export function buildAnalytics(
   // 6. RATING STATISTICS
   // ==========================================================
 
-  const ratingCounts = {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
-
-  let unknownRatings = 0;
-
-  for (const review of collected) {
-    const rating = validRating(
-      review?.rating
-    );
-
-    if (rating === null) {
-      unknownRatings++;
-    } else {
-      ratingCounts[rating]++;
-    }
-  }
-
-  const totalRated =
-    collected.length - unknownRatings;
-
-  const averageRating = totalRated
-    ? Object.entries(ratingCounts).reduce(
-        (sum, [star, count]) => {
-          return sum + Number(star) * count;
-        },
-        0
-      ) / totalRated
-    : null;
+  // Native Shopee totals include ratings without written comments. Never
+  // derive them from the selected comment sample or invent missing buckets.
+  const nonNegativeInteger = value => value !== null && value !== undefined && value !== '' &&
+    Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const ratingCounts = Object.fromEntries([1, 2, 3, 4, 5].map(star =>
+    [star, nonNegativeInteger(shopeeRatings?.counts?.[star])]
+  ));
+  const distributionAvailable = Object.values(ratingCounts).every(value => value !== null);
+  const nativeTotal = nonNegativeInteger(shopeeRatings?.total);
+  const totalRated = nativeTotal ?? (distributionAvailable
+    ? Object.values(ratingCounts).reduce((sum, count) => sum + count, 0) : null);
+  const rawAverage = shopeeRatings?.average;
+  const averageRating = rawAverage !== null && rawAverage !== undefined && rawAverage !== '' &&
+    Number.isFinite(Number(rawAverage)) && Number(rawAverage) >= 0 && Number(rawAverage) <= 5
+    ? Number(rawAverage) : null;
 
   // ==========================================================
   // 7. RETURN ANALYTICS
@@ -309,7 +271,11 @@ export function buildAnalytics(
     ratings: {
       counts: ratingCounts,
       known: totalRated,
-      unknown: unknownRatings,
+      total: totalRated,
+      source: 'shopee',
+      distributionAvailable,
+      approximate: Boolean(shopeeRatings?.approximate),
+      totalApproximate: Boolean(shopeeRatings?.total_approximate),
       average: averageRating,
     },
 

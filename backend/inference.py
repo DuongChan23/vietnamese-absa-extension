@@ -8,6 +8,8 @@ import json
 import os
 import shutil
 from pathlib import Path
+from time import perf_counter
+from .activity_log import log_event
 import torch
 from torch import nn
 from transformers import AutoModel, AutoTokenizer, AutoModelForSequenceClassification
@@ -152,16 +154,21 @@ class ABSAPredictor:
         return ids
 
     @torch.inference_mode()
-    def predict_unified(self, text):
+    def predict_unified(self, text, *, reuse_sentiments=True):
         """Run both learned source-conditioned category vocabularies.
 
         No inferred ontology mappings: categories keep their source namespace.
         Only exact duplicates with the same category string and sentiment merge.
         This inference mode has NOT been validated by the NB55 F1 metric.
         """
+        # ASC depends on text + span, not source/category. Keep this cache
+        # local to one review so concurrent requests cannot share its state.
+        # Disable reuse only when comparing with the original inference path.
+        sentiments = {} if reuse_sentiments else None
         predictions = {}
         for source in self.categories:
-            for item in self.predict(text, source):
+            source_sentiments = sentiments if sentiments is not None else {}
+            for item in self._predict(text, source, source_sentiments):
                 key=(item['start'], item['end'], item['category'], item['sentiment'])
                 if key not in predictions:
                     predictions[key]={**item, 'sources':[source]}
@@ -171,8 +178,30 @@ class ABSAPredictor:
 
     @torch.inference_mode()
     def predict(self,text,source):
+        return self._predict(text, source, {})
+
+    def _predict(self, text, source, sentiments):
         if source not in self.categories:
             raise ValueError(f'Unknown source: {source}. Supported: {list(self.categories)}')
+        started = perf_counter()
+        candidates = self._extract_candidates(text, source)
+        log_event('aspect_extraction_completed', source=source,
+                  categories=len(self.categories[source]), candidates=len(candidates),
+                  duration_ms=(perf_counter() - started) * 1000)
+        spans = sorted({(s,e) for s,e,_ in candidates})
+        started = perf_counter()
+        asc_calls = 0
+        for s,e in spans:
+            if (s,e) not in sentiments:
+                sentiments[(s,e)] = self._classify_span(text, s, e)
+                asc_calls += 1
+        log_event('sentiment_classification_completed', source=source,
+                  spans=len(spans), asc_calls=asc_calls, reused=len(spans)-asc_calls,
+                  duration_ms=(perf_counter() - started) * 1000)
+        return [{'start':s,'end':e,'aspect':text[s:e],'category':cat,'sentiment':sentiments[(s,e)]}
+                for s,e,cat in sorted(candidates) if sentiments.get((s,e)) is not None]
+
+    def _extract_candidates(self, text, source):
         # Inference query uses empty gold; predictions never see DEV labels.
         candidates=set()
         for category in self.categories[source]:
@@ -196,14 +225,12 @@ class ABSAPredictor:
                 if any(max(a,x)<min(b,y) for x,y in chosen):continue
                 chosen.append((a,b));candidates.add((a,b,category))
                 if len(chosen)>=self.max_spans:break
-        spans=sorted({(s,e) for s,e,_ in candidates})
-        sentiments={}
-        for s,e in spans:
-            asc_ids=self._asc_ids(text,s,e)
-            if asc_ids is None:continue
-            ids=torch.tensor([asc_ids],device=DEVICE)
-            att=(ids!=self.asc_tk.pad_token_id).long()
-            label=int(self.asc(input_ids=ids,attention_mask=att).logits.argmax(-1).item())
-            sentiments[(s,e)]=self.labels[label]
-        return [{'start':s,'end':e,'aspect':text[s:e],'category':cat,'sentiment':sentiments[(s,e)]}
-                for s,e,cat in sorted(candidates) if (s,e) in sentiments]
+        return candidates
+
+    def _classify_span(self, text, s, e):
+        asc_ids=self._asc_ids(text,s,e)
+        if asc_ids is None:return None
+        ids=torch.tensor([asc_ids],device=DEVICE)
+        att=(ids!=self.asc_tk.pad_token_id).long()
+        label=int(self.asc(input_ids=ids,attention_mask=att).logits.argmax(-1).item())
+        return self.labels[label]

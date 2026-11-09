@@ -1,6 +1,9 @@
 
 from contextlib import asynccontextmanager
 from typing import Any
+from datetime import datetime
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +12,8 @@ from pydantic import BaseModel, Field
 from .inference import ABSAPredictor
 from .preprocessing import prepare_reviews
 from .category_normalizer import merge_aspects
+from .inference_reuse import ExactPredictionCache
+from .activity_log import activity_context, log_event
 
 
 # ============================================================
@@ -24,13 +29,17 @@ async def lifespan(app: FastAPI):
     global predictor, startup_error
 
     try:
+        started = perf_counter()
+        log_event('model_loading_started')
         predictor = ABSAPredictor()
         startup_error = None
+        log_event('model_loading_completed', duration_ms=(perf_counter()-started)*1000)
 
     except Exception as exc:
         predictor = None
         startup_error = f"{type(exc).__name__}: {exc}"
         print("MODEL NOT READY:", startup_error)
+        log_event('model_loading_failed', error_type=type(exc).__name__)
 
     yield
 
@@ -59,6 +68,8 @@ app.add_middleware(
 # ============================================================
 
 class PredictRequest(BaseModel):
+    run_id: str | None = Field(default=None, max_length=100)
+    product_id: str | None = Field(default=None, max_length=100)
     text: str = Field(
         min_length=1,
         max_length=3000,
@@ -72,6 +83,7 @@ class PredictRequest(BaseModel):
 
 
 class BatchPredictRequest(BaseModel):
+    run_id: str | None = Field(default=None, max_length=100)
     reviews: list[dict[str, Any] | str] = Field(
         min_length=1,
         max_length=30,
@@ -83,7 +95,21 @@ class BatchPredictRequest(BaseModel):
         max_length=100,
     )
 
-    product_id: str | None = None
+    product_id: str | None = Field(default=None, max_length=100)
+
+
+class ActivityLogRequest(BaseModel):
+    event_id: str | None = Field(default=None, max_length=100)
+    event: str = Field(pattern=r'^[a-z][a-z0-9_]{0,63}$')
+    run_id: str | None = Field(default=None, max_length=100)
+    product_id: str | None = Field(default=None, max_length=100)
+    client_time: datetime | None = None
+    duration_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    details: dict[str, str | int | float | bool | None] = Field(default_factory=dict, max_length=30)
+
+
+class ActivityLogBatchRequest(BaseModel):
+    events: list[ActivityLogRequest] = Field(min_length=1, max_length=100)
 
 
 # ============================================================
@@ -114,11 +140,11 @@ def validate_source(source: str, model):
         )
 
 
-def run_inference(text: str, source: str, model):
-    if source == "unified":
-        return model.predict_unified(text)
-
-    return model.predict(text, source)
+def run_inference(text: str, source: str, model, *, run_id=None, product_id=None):
+    with activity_context(run_id=run_id, product_id=product_id):
+        if source == "unified":
+            return model.predict_unified(text)
+        return model.predict(text, source)
 
 
 def get_evaluation_note(source: str) -> str:
@@ -167,6 +193,12 @@ def build_merged_aspects(aspects):
 @app.get("/health")
 def health():
     return {
+        "api_version": "0.3.1",
+        "activity_log": {
+            "enabled": True,
+            "endpoint": "/activity/log",
+            "batch_endpoint": "/activity/log/batch",
+        },
         "ready": predictor is not None,
         "error": (
             startup_error
@@ -184,6 +216,27 @@ def health():
     }
 
 
+@app.post('/activity/log')
+def record_activity(req: ActivityLogRequest):
+    written = log_event(
+        req.event, run_id=req.run_id, product_id=req.product_id,
+        duration_ms=req.duration_ms, origin='extension',
+        client_time=req.client_time.isoformat() if req.client_time else None,
+        client_details=req.details,
+        client_event_id=getattr(req, 'event_id', None),
+    )
+    if not written:
+        raise HTTPException(status_code=503, detail='activity_log_unavailable')
+    return {'ok': True}
+
+
+@app.post('/activity/log/batch')
+def record_activity_batch(req: ActivityLogBatchRequest):
+    for event in req.events:
+        record_activity(event)
+    return {'ok': True, 'written': len(req.events)}
+
+
 # ============================================================
 # 7. SINGLE REVIEW INFERENCE
 # ============================================================
@@ -192,6 +245,10 @@ def health():
 def predict(req: PredictRequest):
     model = get_predictor()
     validate_source(req.source, model)
+    run_id = req.run_id or str(uuid4())
+    started = perf_counter()
+    log_event('single_analysis_started', run_id=run_id, product_id=req.product_id,
+              source=req.source, text_chars=len(req.text))
 
     try:
         # Step 1: Original ABSA inference.
@@ -199,6 +256,8 @@ def predict(req: PredictRequest):
             req.text,
             req.source,
             model,
+            run_id=run_id,
+            product_id=req.product_id,
         )
 
         # Step 2: Normalize categories and
@@ -206,6 +265,9 @@ def predict(req: PredictRequest):
         aspects_merged = build_merged_aspects(
             aspects
         )
+        log_event('single_analysis_completed', run_id=run_id, product_id=req.product_id,
+                  duration_ms=(perf_counter()-started)*1000,
+                  aspects=len(aspects), merged_aspects=len(aspects_merged))
 
         # Step 3: Preserve original predictions
         # and return merged predictions separately.
@@ -226,6 +288,8 @@ def predict(req: PredictRequest):
         }
 
     except Exception as exc:
+        log_event('single_analysis_failed', run_id=run_id, product_id=req.product_id,
+                  duration_ms=(perf_counter()-started)*1000, error_type=type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail=(
@@ -243,21 +307,40 @@ def predict(req: PredictRequest):
 def predict_batch(req: BatchPredictRequest):
     model = get_predictor()
     validate_source(req.source, model)
+    run_id = req.run_id or str(uuid4())
+    batch_id = str(uuid4())
+    started = perf_counter()
+    log_event('batch_analysis_started', run_id=run_id, product_id=req.product_id,
+              batch_id=batch_id, reviews=len(req.reviews), source=req.source)
 
     # Step 1: Validate and deduplicate reviews.
     prepared = prepare_reviews(
         req.reviews,
         product_id=req.product_id,
     )
+    log_event('batch_preprocessing_completed', run_id=run_id, product_id=req.product_id,
+              batch_id=batch_id, duration_ms=(perf_counter()-started)*1000,
+              accepted=prepared['stats']['accepted'], rejected=prepared['stats']['rejected'])
 
     results = []
+    prediction_cache = ExactPredictionCache(
+        lambda text, source: run_inference(
+            text, source, model, run_id=run_id, product_id=req.product_id
+        )
+    )
+    seen_texts = set()
 
     # Step 2: Analyze each accepted review.
     for review in prepared["reviews"]:
         text = review["text"]
+        review_started = perf_counter()
+        log_fields = dict(run_id=run_id, product_id=req.product_id,
+                          batch_id=batch_id, review_id=review['review_id'])
 
         # Keep original length protection.
         if len(text) > 3000:
+            log_event('review_analysis_failed', **log_fields, error_type='text_too_long',
+                      duration_ms=(perf_counter()-review_started)*1000)
             results.append({
                 **review,
                 "status": "error",
@@ -268,17 +351,23 @@ def predict_batch(req: BatchPredictRequest):
             continue
 
         try:
-            # Original model inference.
-            aspects = run_inference(
-                text,
-                req.source,
-                model,
-            )
+            log_event('review_analysis_started', **log_fields, text_chars=len(text),
+                      cache_hit=text in seen_texts)
+            # Reuse only identical text; retain each review's ID/rating/order.
+            with activity_context(**log_fields):
+                aspects = prediction_cache.predict(
+                    text,
+                    req.source,
+                )
 
             # New category normalization layer.
             aspects_merged = build_merged_aspects(
                 aspects
             )
+            seen_texts.add(text)
+            log_event('review_analysis_completed', **log_fields,
+                      duration_ms=(perf_counter()-review_started)*1000,
+                      aspects=len(aspects), merged_aspects=len(aspects_merged))
 
             results.append({
                 **review,
@@ -292,6 +381,9 @@ def predict_batch(req: BatchPredictRequest):
             })
 
         except Exception as exc:
+            log_event('review_analysis_failed', **log_fields,
+                      duration_ms=(perf_counter()-review_started)*1000,
+                      error_type=type(exc).__name__)
             results.append({
                 **review,
                 "status": "error",
@@ -300,6 +392,10 @@ def predict_batch(req: BatchPredictRequest):
                 "error": type(exc).__name__,
             })
 
+    log_event('batch_analysis_completed', run_id=run_id, product_id=req.product_id,
+              batch_id=batch_id, duration_ms=(perf_counter()-started)*1000,
+              completed=sum(row['status']=='ok' for row in results),
+              failed=sum(row['status']=='error' for row in results))
     # Step 3: Return individual predictions
     # and preprocessing statistics.
     return {

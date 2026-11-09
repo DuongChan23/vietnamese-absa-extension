@@ -125,7 +125,7 @@ h2 {
 
 .choice-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -154,6 +154,7 @@ h2 {
   margin-top: 13px;
 }
 .primary:hover:not(:disabled) { background: #d94325; }
+.cancel { width: 100%; margin-top: 8px; }
 
 .secondary {
   border: 1px solid #e1e5eb;
