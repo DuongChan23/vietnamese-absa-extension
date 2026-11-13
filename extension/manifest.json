@@ -3,10 +3,9 @@
   "manifest_version": 3,
   "name": "Vietnamese ABSA Analyzer (Local)",
   "description": "Persistent side-panel review analyzer powered by local ABSA FastAPI.",
-  "version": "0.3.2",
+  "version": "0.3.4",
+  "minimum_chrome_version": "120",
   "permissions": [
-    "activeTab",
-    "tabs",
     "scripting",
     "sidePanel",
     "storage"

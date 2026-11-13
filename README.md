@@ -1,5 +1,7 @@
 # Vietnamese ABSA Shopee — Hướng dẫn cài đặt và chạy thử
 
+Chuẩn bị phát hành công khai: xem [báo cáo rà soát và các bước cần kiểm chứng trên AWS](docs/production_review.md).
+
 > **Phiên bản tài liệu:** 30/10/2026 · **Phạm vi:** chạy hệ thống cục bộ trên Windows 10/11, gồm FastAPI và Chrome Extension. Hướng dẫn được đối chiếu với `backend/main.py`, `backend/inference.py`, `extension/manifest.json`, các module thu thập/batch và báo cáo dự án hiện có. **Không phải hướng dẫn huấn luyện lại các notebook Colab.**
 
 ## 1. Chức năng hệ thống
@@ -134,10 +136,17 @@ Dữ liệu VnCoreNLP lấy từ dự án chính thức: <https://github.com/vnc
 Sau đó thử (từ thư mục gốc, khi môi trường Python đã kích hoạt):
 
 ```bat
-python -c "import py_vncorenlp,os; p=os.path.abspath('vncorenlp'); m=py_vncorenlp.VnCoreNLP(annotators=['wseg'],save_dir=p); print(m.word_segment('Điện thoại có màn hình đẹp nhưng pin yếu.'))"
+python -c "from backend.java_runtime import configure_java; configure_java(); import py_vncorenlp,os; p=os.path.abspath('vncorenlp'); m=py_vncorenlp.VnCoreNLP(annotators=['wseg'],save_dir=p); print(m.word_segment('Điện thoại có màn hình đẹp nhưng pin yếu.'))"
 ```
 
 Nếu in ra danh sách câu đã tách từ, bộ tách từ hoạt động. VnCoreNLP được sử dụng ở nhánh **PhoBERT ASC**, không phải bộ sửa lỗi chính tả/từ viết tắt tự động.
+
+Trên Windows, backend tự tìm JDK từ `JAVA_HOME`/`JDK_HOME`, lệnh `java` hoặc
+`javac` trên PATH, rồi các thư mục cài Java thông dụng. Đường dẫn được kiểm tra
+có `java.exe`, `javac.exe` và `jvm.dll`; `JAVA_HOME` chỉ được đặt cho tiến trình
+backend, không sửa cấu hình Windows. Vì vậy máy đã có JDK trên PATH không cần
+đặt lại biến này sau mỗi lần mở terminal. Nếu cấu hình `JAVA_HOME` thủ công bị
+sai, sửa nó về thư mục gốc JDK rồi khởi động lại backend.
 
 ## 5. Khởi động FastAPI Backend
 
@@ -156,7 +165,7 @@ Mở trình duyệt:
 - **Health:** <http://127.0.0.1:8000/health>
 - **Swagger API:** <http://127.0.0.1:8000/docs>
 
-Kết quả `/health` phải có `"ready": true`. Nếu `"ready": false`, xem giá trị `"error"` hoặc console CMD số 1 để tìm lỗi nạp mô hình. HTTP 200 của `/health` **không** có nghĩa mô hình đã sẵn sàng: phải kiểm tra trường `ready`.
+Kết quả `/health` phải có `"ready": true`. Nếu `"ready": false`, xem log của tiến trình backend để tìm lỗi nạp mô hình; API chỉ trả mã lỗi chung để tránh lộ thông tin nội bộ. HTTP 200 của `/health` **không** có nghĩa mô hình đã sẵn sàng: phải kiểm tra trường `ready`.
 
 ## 6. Chạy thử API trước khi mở Extension
 
@@ -230,20 +239,14 @@ Invoke-RestMethod `
 6. Mở một **trang sản phẩm Shopee Việt Nam** (`https://shopee.vn/...`) và để phần đánh giá tải xong.
 7. Nhấn biểu tượng Extension để mở **Side Panel**.
 
-### Cách A — Demo nhanh một bình luận (ít phụ thuộc giao diện Shopee)
+### Demo theo một sản phẩm Shopee
 
-- Dán văn bản vào ô **Nội dung đánh giá**.
-- Nhấn **Phân tích**.
-- Xem các khía cạnh và nhãn cảm xúc hiển thị.
-- Hoặc bôi đen một đoạn văn bản trên trang, nhấn **Lấy văn bản được chọn**, rồi **Phân tích**.
-
-### Cách B — Demo theo một sản phẩm Shopee
-
-- Nhấn **Lấy thông tin sản phẩm Shopee** để xem thông tin sản phẩm khi collector đọc được từ trang.
-- Side Panel tự tải sản phẩm đang mở khi đổi URL hoặc tab; dữ liệu phân tích của sản phẩm trước được xóa. Tác vụ cũ bị dừng ở Extension và phản hồi trả về muộn được bỏ qua.
+- Mở trang sản phẩm Shopee; Side Panel tự đọc tên, giá và thông tin đánh giá trên trang.
+- Khi chưa phân tích hoặc đang lấy bình luận, Side Panel tự theo sản phẩm trên tab. Đổi sản phẩm sẽ dừng lượt lấy cũ, xóa dữ liệu cũ và tải thông tin sản phẩm mới.
+- Khi đã lấy được bình luận và bắt đầu phân tích, Side Panel giữ sản phẩm đó xuyên suốt các batch và sau khi có kết quả. Điều hướng sang sản phẩm khác không hủy phân tích hoặc thay kết quả.
+- Nút **Đổi sản phẩm** chỉ xuất hiện khi tab đang mở một sản phẩm Shopee khác sản phẩm được giữ trong Side Panel. Bấm nút để chuyển sang sản phẩm hiện tại trên tab và xóa dữ liệu đang giữ; nếu đang phân tích, lượt cũ được dừng ở Extension và phản hồi muộn bị bỏ qua. Quay lại đúng sản phẩm cũ sẽ ẩn nút và giữ kết quả.
 - Chọn mục tiêu **50 / 100 / 200 / Tất cả bình luận có nội dung**. Collector ưu tiên bộ lọc **Có bình luận/Có nội dung** của Shopee, quay về trang đầu và chỉ nhận lời bình của người mua. Nếu không có bộ lọc này, collector duyệt các đánh giá rồi bỏ các thẻ chỉ chấm sao, thông tin phân loại, nút hữu ích và phản hồi người bán. “Tất cả” đi đến trang cuối tải được, không giới hạn ở 65 trang.
-- Nhấn **Lấy bình luận Shopee** và xem số review thực tế thu thập được, số sao, lý do dừng.
-- Nhấn **Phân tích tất cả bình luận đã lấy**.
+- Nhấn **Phân tích đánh giá sản phẩm** để lấy bình luận rồi tự chuyển sang phân tích. Giao diện hiển thị số lời bình thực lấy, số sao và lý do dừng thu thập.
 - Theo dõi tiến độ các batch, thống kê category/sentiment, xem danh sách review.
 - Nếu giao diện hiện các nút xuất, dùng **Xuất JSON / Xuất CSV** để lưu dữ liệu thử nghiệm.
 
@@ -328,28 +331,70 @@ source ở chế độ `unified`. Trong mỗi request batch, các review có tex
 nhau cũng dùng lại dự đoán, nhưng vẫn giữ từng review, ID, số sao và thứ tự.
 Text không được chuẩn hóa để làm khóa cache; các chuỗi khác khoảng trắng vẫn
 được suy luận riêng. Cache không được giữ giữa các request và lỗi không được
-cache. Checkpoint, 15 category, ngưỡng 0,85 và phép tính của các model giữ nguyên.
+cache. Checkpoint, 15 category và ngưỡng 0,85 giữ nguyên.
+
+XLM-R/NB39 hỗ trợ gộp truy vấn category của cả hai source thành batch FP32.
+Các truy vấn được nhóm theo độ dài, padding bên phải với attention mask đúng;
+phần padding bị loại trước khi tìm span. Giới hạn 384 token vẫn được xử lý như
+đường tuần tự: bỏ truy vấn quá dài, không tự cắt text. Các head tìm biên, NB46,
+quy tắc chọn span và PhoBERT vẫn chạy theo từng truy vấn/span như trước. Khi
+encoder thiếu bộ nhớ, batch được chia nhỏ và thử lại; lỗi khác vẫn được báo.
 
 Trên môi trường đã cài đủ thư viện và nạp được model, chạy từ thư mục gốc:
 
 ```bat
-python -m backend.benchmark_inference tests/fixtures/inference_reviews.json --repeats 2
-python -m backend.benchmark_inference reviews.csv --limit 10 --repeats 2
+python -m backend.benchmark_inference tests/fixtures/inference_batching_reviews.json --limit 30 --repeats 3 --activate
+python -m backend.benchmark_inference reviews.csv --limit 10 --repeats 2 --batch-sizes 1 4 8 16
 ```
 
-Công cụ so sánh đường suy luận ban đầu (không tái sử dụng giữa source/review)
-với đường đã tối ưu, bao gồm toàn bộ `aspects` và `aspects_merged`, thứ tự,
-offset, category, sentiment và nguồn. Kết quả cần có `outputs_equal: true`;
-nếu khác, công cụ trả mã thoát 1 và liệt kê index review khác nhau. Thời gian
-không gồm nạp checkpoint, có warmup và đồng bộ CUDA khi dùng GPU. File mẫu
-chỉ kiểm tra tính tương đương, không chứa nhãn gold để đo độ chính xác.
+Công cụ so sánh encoder tuần tự (`batch_size=1`) với các batch 4, 8, 16,
+bao gồm toàn bộ `aspects` và `aspects_merged`, thứ tự, offset, category,
+sentiment và nguồn. Cả hai phía cùng bật cache đang dùng trong API để đo riêng
+lợi ích bổ sung của batching. Kết quả cần có `outputs_equal: true`; nếu khác,
+công cụ trả mã thoát 1 và liệt kê index review khác nhau cho từng batch.
+Thời gian không gồm nạp checkpoint, có warmup, đảo thứ tự chạy giữa các lượt
+và đồng bộ CUDA khi dùng GPU. Báo cáo mặc định lưu tại
+`logs/inference_benchmark.json`, không ghi nội dung bình luận.
 
-`speedup` phụ thuộc số review trùng và số span trùng giữa hai source. Với các
-review hoàn toàn khác nhau, số lượt XLM-R vẫn là tối đa 15/review. Khi gọi từ
-extension, cache chỉ có hiệu lực trong từng lô 10 review. Benchmark mô phỏng một
-request tối đa 30 review; dùng `--limit 10` để đối chiếu với kích thước lô của
-extension. Chưa thay đổi precision hay gộp tensor thành batch vì cần đối chiếu
-đầu ra trên checkpoint thật trước khi áp dụng các thay đổi số học đó.
+`--activate` yêu cầu chế độ unified và ít nhất hai lượt đo. Công cụ lưu batch
+nhanh nhất có đầu ra khớp ở mọi lượt đối chiếu và nhanh hơn tuần tự tối thiểu
+5% vào `logs/inference_runtime.json`; nếu không có, chọn batch 1. **Khởi động
+lại backend** để nạp cấu hình. Cấu hình chỉ áp dụng khi hash checkpoint,
+tokenizer, policy, phiên bản thư viện, CPU/GPU và số thread khớp môi trường
+đã đo. Môi trường khác hoặc chưa benchmark sẽ dùng tuần tự. Có thể ép chạy
+tuần tự trong PowerShell trước khi mở backend:
+
+```powershell
+$env:ABSA_ENCODER_BATCH_SIZE = '1'
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+Xóa biến bằng `Remove-Item Env:ABSA_ENCODER_BATCH_SIZE` để dùng lại cấu hình
+đã kiểm chứng. `/health` hiển thị `inference_runtime` gồm thiết bị, FP32, số
+thread, batch size và nguồn cấu hình. Log `aspect_extraction_completed` khi
+chạy batch có thêm `tokenization_ms`, `encoder_ms`, `decoding_ms`,
+`encoder_calls` và `oom_splits`; không lưu text review.
+
+`speedup` phụ thuộc phần cứng, độ dài review và số span. Với batch 16 và đủ
+bộ nhớ, 15 truy vấn category được đưa qua encoder trong một lượt/review.
+Khi gọi từ extension, cache chỉ có hiệu lực trong từng lô 10 review. Benchmark
+mô phỏng một request tối đa 30 review; dùng `--limit 10` để đo theo kích thước
+lô của extension. File mẫu là bộ hồi quy, không có nhãn gold để đo Accuracy/F1.
+FP32 batched vẫn có thể lệch số thực nhỏ so với tuần tự; kết quả khớp trên bộ
+đã thử không bảo đảm khớp mọi văn bản mới. Nên chạy lại đối chiếu bằng dữ liệu
+đại diện thực tế khi đổi môi trường hoặc tập review.
+
+### Triển khai Oracle Cloud Always Free
+
+Hướng dẫn đăng ký, tạo VM ARM, chuyển model, chạy Docker, bật HTTPS và tạo ZIP
+extension kết nối máy chủ nằm trong [deploy/oracle/README.md](deploy/oracle/README.md).
+Bản trong workspace mặc định vẫn dùng backend localhost.
+
+### Triển khai AWS EC2
+
+Hướng dẫn dùng tài khoản AWS có credit, EC2 Ubuntu 8 GiB, chuyển checkpoint,
+bật HTTPS và tạo ZIP extension nằm trong [deploy/aws/README.md](deploy/aws/README.md).
+Cấu hình AWS tái sử dụng Docker stack có sẵn, giảm giới hạn RAM API còn 6 GiB.
 
 ## 9. Xử lý lỗi thường gặp
 
@@ -362,6 +407,7 @@ extension. Chưa thay đổi precision hay gộp tensor thành batch vì cần �
 | `FileNotFoundError` / thiếu checkpoint | Chưa copy đủ file model/Drive | Đối chiếu cây thư mục ở mục 3 |
 | `NB39/NB46 SHA mismatch` | Checkpoint hoặc policy không cùng lần huấn luyện | Copy lại đúng checkpoint NB39, NB46 và policy tương ứng; **không sửa hash để bỏ kiểm tra** |
 | Lỗi Java/VnCoreNLP | Thiếu JAR hoặc `models/wordsegmenter`, Java chưa hoạt động | Kiểm tra thư mục `vncorenlp/`, thử lệnh mục 4 |
+| `Unable to find JAVA_HOME` | Backend cũ chưa tự tìm JDK khi khởi động | Khởi động lại backend bằng code mới; cần JDK đầy đủ trên PATH hoặc `JAVA_HOME` trỏ đúng thư mục JDK |
 | Hết RAM / khởi động rất chậm | XLM-R + PhoBERT chiếm nhiều tài nguyên | Đóng ứng dụng nặng, ưu tiên GPU phù hợp, thử một bình luận trước |
 | Extension không mở/không có Side Panel | Sai thư mục hoặc không có `manifest.json`/`background.js` | Load unpacked đúng `extension/`, bấm **Reload** ở `chrome://extensions` |
 | Extension không kết nối Backend | Backend chưa chạy/port khác/`ready: false` | Thử `http://127.0.0.1:8000/health`, giữ port 8000 |

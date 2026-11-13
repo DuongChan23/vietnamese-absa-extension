@@ -15,6 +15,13 @@ _lock = Lock()
 _context = ContextVar('absa_activity_context', default={})
 
 
+class ActivityFileHandler(RotatingFileHandler):
+    def handleError(self, record):
+        # Logging normally swallows write failures; HTTP clients need a failed
+        # acknowledgement so their queued events are retained for retry.
+        raise
+
+
 @contextmanager
 def activity_context(**values):
     token = _context.set({**_context.get(), **values})
@@ -30,7 +37,7 @@ def _get_logger():
         if _logger is None:
             LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
             logger = logging.Logger('absa.activity', level=logging.INFO)
-            handler = RotatingFileHandler(
+            handler = ActivityFileHandler(
                 LOG_PATH, maxBytes=10 * 1024 * 1024, backupCount=3, encoding='utf-8'
             )
             handler.setFormatter(logging.Formatter('%(message)s'))

@@ -19,24 +19,45 @@ export function productIdFromUrl(value) {
 
 export class ProductSession {
   context = null;
+  pageContext = null;
+  pinned = false;
   revision = 0;
   run = null;
 
-  update(tab) {
+  get canSwitchProduct() {
+    return Boolean(this.pinned && this.pageContext?.productId &&
+      this.pageContext.productId !== this.context?.productId);
+  }
+
+  update(tab, { switchProduct = false } = {}) {
     const productId = productIdFromUrl(tab?.url);
     const key = `${tab?.id ?? "none"}:${productId ?? "none"}`;
+    this.pageContext = { key, tabId: tab?.id, productId, url: tab?.url };
+    if (this.pinned) {
+      if (!switchProduct || !this.canSwitchProduct) return false;
+      this.pinned = false;
+    }
     if (key === this.context?.key) return false;
     this.cancel();
     this.revision++;
-    this.context = { key, tabId: tab?.id, productId, url: tab?.url };
+    this.context = { ...this.pageContext };
     return true;
   }
 
-  begin() {
+  begin(stage = "collecting") {
+    if (stage === "collecting" && this.pinned) {
+      if (this.pageContext?.productId !== this.context?.productId) {
+        throw new Error("product_switch_required");
+      }
+      // A fresh collection follows navigation again. Use the visible tab even
+      // if the same product was opened in a different tab while pinned.
+      this.pinned = false;
+      this.update({ id: this.pageContext.tabId, url: this.pageContext.url });
+    }
     this.cancel();
     const controller = new AbortController();
     this.run = {
-      ...this.context, revision: this.revision,
+      ...this.context, revision: this.revision, stage,
       runId: crypto.randomUUID(), controller, signal: controller.signal
     };
     return this.run;
@@ -44,6 +65,20 @@ export class ProductSession {
 
   isCurrent(run) {
     return this.run === run && this.revision === run.revision && !run.signal.aborted;
+  }
+
+  pinForAnalysis(run) {
+    if (!this.isCurrent(run)) return false;
+    run.stage = "analyzing";
+    this.pinned = true;
+    return true;
+  }
+
+  finish(run) {
+    if (this.run !== run) return false;
+    this.run = null;
+    // Keep the product pinned after success, failure or user cancellation.
+    return true;
   }
 
   cancel() {

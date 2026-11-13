@@ -95,6 +95,16 @@ h2 {
 }
 .product-copy h2 { margin: 4px 0 6px; font-size: 14px; }
 
+.product-switch {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #fed7c7;
+  border-radius: 9px;
+  background: #fff8f4;
+}
+.product-switch p { margin: 0 0 9px; line-height: 1.5; }
+.product-switch button { width: 100%; }
+
 .eyebrow {
   font-size: 10px;
   font-weight: 750;
@@ -399,30 +409,6 @@ h2 {
 .tag.negative { background: #fdebec; color: #c62828; }
 .tag.neutral { background: #fff7e6; color: #a66a00; }
 
-.manual { margin-top: 12px; }
-.manual summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: #475467;
-  font-weight: 650;
-}
-.manual textarea {
-  width: 100%;
-  border: 1px solid #d0d5dd;
-  border-radius: 8px;
-  padding: 10px;
-  resize: vertical;
-}
-.manual-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-.manual-actions button { flex: 1; }
-.manual-results .tag {
-  display: inline-block;
-  margin: 6px 4px 0 0;
-}
 .empty {
   font-size: 12px;
   color: #667085;

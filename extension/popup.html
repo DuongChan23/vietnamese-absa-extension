@@ -22,7 +22,7 @@
       <div class="product-row">
         <div class="product-art" aria-hidden="true">▤</div>
         <div class="product-copy">
-          <p class="eyebrow">SẢN PHẨM ĐANG XEM</p>
+          <p id="productLabel" class="eyebrow">SẢN PHẨM ĐANG XEM</p>
           <h2 id="productName">
             Mở trang sản phẩm Shopee để bắt đầu
           </h2>
@@ -31,6 +31,15 @@
             Thông tin sẽ được tải khi phân tích.
           </p>
         </div>
+      </div>
+
+      <div id="productSwitch" class="product-switch" hidden>
+        <p class="small muted" role="status">
+          Bạn đang xem sản phẩm khác trên Shopee. Extension vẫn giữ phân tích của sản phẩm này.
+        </p>
+        <button id="switchProduct" class="secondary" type="button">
+          Đổi sản phẩm
+        </button>
       </div>
 
       <div class="divider"></div>
@@ -133,26 +142,6 @@
         <div id="reviewList" class="review-list"></div>
       </section>
     </div>
-
-    <details class="manual card">
-      <summary>Phân tích một đoạn đánh giá riêng</summary>
-      <label class="field-label" for="review">
-        Nội dung đánh giá
-      </label>
-
-      <textarea id="review" rows="3" maxlength="3000"
-        placeholder="Dán bình luận hoặc chọn văn bản trên Shopee..."></textarea>
-
-      <div class="manual-actions">
-        <button id="fromPage" class="secondary" type="button">
-          Lấy văn bản chọn
-        </button>
-        <button id="analyze" class="secondary" type="button">
-          Phân tích
-        </button>
-      </div>
-      <div id="results" class="manual-results"></div>
-    </details>
 
     <footer>
       Phân tích dựa trên bình luận đã thu thập ·

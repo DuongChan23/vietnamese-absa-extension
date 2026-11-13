@@ -52,6 +52,18 @@ class ActivityLogTests(unittest.TestCase):
         with patch.object(activity_log, '_get_logger', side_effect=OSError('disk unavailable')):
             self.assertFalse(activity_log.log_event('review_analysis_completed', duration_ms=1))
 
+    def test_disk_write_failure_returns_false_instead_of_acknowledging_lost_event(self):
+        with TemporaryDirectory() as directory:
+            handler = activity_log.ActivityFileHandler(Path(directory)/'activity.jsonl', encoding='utf-8')
+            logger = logging.Logger('test.disk_failure')
+            logger.addHandler(handler)
+            try:
+                with patch.object(handler.stream, 'write', side_effect=OSError('disk full')), \
+                     patch.object(activity_log, '_get_logger', return_value=logger):
+                    self.assertFalse(activity_log.log_event('test_event'))
+            finally:
+                handler.close()
+
 
 if __name__ == '__main__':
     unittest.main()

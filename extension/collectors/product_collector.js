@@ -342,33 +342,7 @@
   // =====================================================
 
   function parseCompactNumber(raw) {
-    const value = clean(raw)
-      .toLowerCase()
-      .replace(/\s/g, "");
-
-    if (!value) return null;
-
-    if (/[km]$/.test(value)) {
-      const unit = value.slice(-1);
-      const base = Number(
-        value.slice(0, -1).replace(",", ".")
-      );
-
-      if (!Number.isFinite(base)) return null;
-
-      return Math.round(
-        base * (unit === "k" ? 1000 : 1000000)
-      );
-    }
-
-    // Examples: 2.634 -> 2634, 2634 -> 2634
-    if (/^\d{1,3}(?:[.,]\d{3})+$/.test(value)) {
-      return Number(value.replace(/[.,]/g, ""));
-    }
-
-    if (/^\d+$/.test(value)) return Number(value);
-
-    return null;
+    return globalThis.__absaReviewHelpers.parseCount(raw)?.value ?? null;
   }
 
   function getReviewCount() {
@@ -433,8 +407,9 @@
   }
 
   const reviewCountResult = getReviewCount();
+  const rating = getRating();
   const ratingSummary = globalThis.__absaReviewHelpers.readShopeeRatingSummary(document, {
-    average: getRating(),
+    average: rating,
     total: schema.aggregateRating?.ratingCount ?? reviewCountResult?.value ?? null
   });
 
@@ -469,7 +444,7 @@
     price_text: priceResult?.value ?? null,
     price_source: priceResult?.source ?? null,
 
-    rating: getRating(),
+    rating,
     rating_summary: ratingSummary,
 
     review_count: reviewCountResult?.value ?? null,
@@ -484,7 +459,7 @@
       name: Boolean(name),
       price: Boolean(priceResult),
       description: Boolean(description),
-      rating: getRating() !== null,
+      rating: rating !== null,
       review_count: Boolean(reviewCountResult),
     },
   };

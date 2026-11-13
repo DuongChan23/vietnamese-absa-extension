@@ -57,9 +57,18 @@ def prepare_reviews(
             continue
 
         raw_id = row.get("review_id", row.get("rating_id"))
+        raw_product_id = row.get("product_id", product_id)
+        invalid_identity = next((name for name, value in (
+            ('review_id', raw_id), ('product_id', raw_product_id)
+        ) if value is not None and (
+            type(value) not in (str, int) or len(str(value)) > 100
+            or any(ord(char) < 32 or ord(char) == 127 for char in str(value))
+        )), None)
+        if invalid_identity:
+            rejected.append({'index': index, 'reason': f'invalid_{invalid_identity}'})
+            continue
         review_id = str(raw_id).strip() if raw_id is not None else None
         review_id = review_id or None
-        raw_product_id = row.get("product_id", product_id)
         pid = str(raw_product_id).strip() if raw_product_id is not None else ""
 
         if review_id is not None:

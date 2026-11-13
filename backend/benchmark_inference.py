@@ -1,4 +1,4 @@
-"""Compare original and reused inference outputs and elapsed time on real models.
+"""Compare serial and FP32 encoder batching on real checkpoints.
 
 Run from the project root:
     python -m backend.benchmark_inference reviews.json --limit 10 --repeats 2
@@ -9,6 +9,7 @@ or an extension-exported CSV with a `text` column. No review text is printed.
 
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
@@ -33,11 +34,12 @@ def load_texts(path, limit):
     return texts[:limit]
 
 
-def run_once(model, texts, source, reuse):
+def run_once(model, texts, source, reuse, encoder_batch_size=None):
     def predict(text, selected_source):
+        options = {'encoder_batch_size': encoder_batch_size} if encoder_batch_size is not None else {}
         if selected_source == 'unified':
-            return model.predict_unified(text, reuse_sentiments=reuse)
-        return model.predict(text, selected_source)
+            return model.predict_unified(text, reuse_sentiments=reuse, **options)
+        return model.predict(text, selected_source, **options)
 
     # Match the API's cache scope (one request, at most 30 accepted reviews).
     cache = ExactPredictionCache(predict) if reuse else None
@@ -54,9 +56,21 @@ def main():
     parser.add_argument('--source', default='unified')
     parser.add_argument('--limit', type=int, default=10)
     parser.add_argument('--repeats', type=int, default=1)
+    parser.add_argument('--batch-sizes', type=int, nargs='+', default=[1, 4, 8, 16])
+    parser.add_argument('--output', type=Path, default=Path('logs/inference_benchmark.json'))
+    parser.add_argument('--activate', action='store_true',
+                        help='Save fastest matching configuration for this machine/checkpoints')
     args = parser.parse_args()
+    # VnCoreNLP changes the process working directory during initialization.
+    args.reviews = args.reviews.resolve()
+    args.output = args.output.resolve()
     if not 1 <= args.limit <= 30 or args.repeats < 1:
         parser.error('--limit must be 1..30 and --repeats must be positive')
+    if any(not 1 <= size <= 32 for size in args.batch_sizes):
+        parser.error('--batch-sizes must be 1..32')
+    if args.activate and (args.source != 'unified' or args.repeats < 2):
+        parser.error('--activate requires --source unified and --repeats >= 2')
+    sizes = list(dict.fromkeys([1, *args.batch_sizes]))
     texts = load_texts(args.reviews, args.limit)
     if not texts:
         parser.error('No valid reviews to compare')
@@ -72,44 +86,58 @@ def main():
         if DEVICE.type == 'cuda':
             torch.cuda.synchronize(DEVICE)
 
-    # Warm up both paths; checkpoint loading is excluded from timings.
-    warm_reference = run_once(model, texts[:1], args.source, False)
-    warm_optimized = run_once(model, texts[:1], args.source, True)
-    mismatches = []
-    if warm_reference != warm_optimized:
-        mismatches.append({'repeat': 'warmup', 'review_indices': [0]})
-    times = {'reference': [], 'optimized': []}
+    # Both paths retain the existing exact-text/span reuse. Measure batching's
+    # additional benefit, excluding checkpoint load and warmup.
+    warm_reference = run_once(model, texts[:1], args.source, True, 1)
+    mismatches = {size: [] for size in sizes}
+    for size in sizes[1:]:
+        if run_once(model, texts[:1], args.source, True, size) != warm_reference:
+            mismatches[size].append({'repeat': 'warmup', 'review_indices': [0]})
+    times = {size: [] for size in sizes}
     for repeat in range(args.repeats):
         outputs = {}
         # Alternate order to reduce systematic warmup/thermal timing bias.
-        modes = [('reference', False), ('optimized', True)]
+        modes = sizes[:]
         if repeat % 2:
             modes.reverse()
-        for name, reuse in modes:
+        for size in modes:
             synchronize()
             start = perf_counter()
-            outputs[name] = run_once(model, texts, args.source, reuse)
+            outputs[size] = run_once(model, texts, args.source, True, size)
             synchronize()
-            times[name].append(perf_counter() - start)
-        changed = [i for i, (old, new) in enumerate(zip(
-            outputs['reference'], outputs['optimized']
-        )) if old != new]
-        if changed:
-            mismatches.append({'repeat': repeat + 1, 'review_indices': changed})
-    old_time = sum(times['reference']) / args.repeats
-    new_time = sum(times['optimized']) / args.repeats
-    print(json.dumps({
-        'device': str(DEVICE),
+            times[size].append(perf_counter() - start)
+            print(f'repeat={repeat+1} batch_size={size} seconds={times[size][-1]:.3f}', flush=True)
+        for size in sizes[1:]:
+            changed = [i for i, (old, new) in enumerate(zip(outputs[1], outputs[size])) if old != new]
+            if changed:
+                mismatches[size].append({'repeat': repeat + 1, 'review_indices': changed})
+    means = {size: sum(values)/args.repeats for size, values in times.items()}
+    eligible = [size for size in sizes if not mismatches[size]]
+    fastest = min(eligible, key=means.get)
+    # Avoid enabling batching for timing noise alone.
+    selected = fastest if means[1]/means[fastest] >= 1.05 else 1
+    report = {
+        'runtime': model.runtime_info(),
+        'signature': model.runtime_signature,
+        'input_sha256': hashlib.sha256(args.reviews.read_bytes()).hexdigest(),
         'source': args.source,
         'reviews': len(texts),
         'unique_texts': len(set(texts)),
-        'outputs_equal': not mismatches,
+        'outputs_equal': all(not differences for differences in mismatches.values()),
         'mismatches': mismatches,
         'seconds': times,
-        'mean_seconds': {'reference': old_time, 'optimized': new_time},
-        'speedup': old_time / new_time if new_time else None,
-    }, indent=2))
-    return 1 if mismatches else 0
+        'mean_seconds': means,
+        'speedup': {size: means[1]/duration if duration else None for size, duration in means.items()},
+        'selected_batch_size': selected,
+        'activated': args.activate,
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')
+    if args.activate:
+        from .inference_runtime import save_profile
+        save_profile(model.runtime_signature, selected, args.output)
+    print(json.dumps(report, indent=2))
+    return 0 if report['outputs_equal'] else 1
 
 
 if __name__ == '__main__':

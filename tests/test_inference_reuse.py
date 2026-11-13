@@ -23,7 +23,7 @@ def load_predictor_class():
         inference_mode=lambda: lambda method: method,
     )
     transformers = SimpleNamespace(
-        AutoModel=object, AutoTokenizer=object,
+        AutoConfig=object, AutoModel=object, AutoTokenizer=object,
         AutoModelForSequenceClassification=object,
     )
     path = Path(__file__).resolve().parents[1] / 'backend' / 'inference.py'

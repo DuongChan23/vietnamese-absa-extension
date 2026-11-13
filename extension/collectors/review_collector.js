@@ -493,11 +493,6 @@
     let skippedDuplicate = 0;
     let unknownRatings = 0;
 
-    const preview = cards.slice(0, 3).map(card => ({
-      raw: clean(rawText(card)).slice(0, 250),
-      extracted: extractText(card)
-    }));
-
     for (const card of cards) {
       if (reviews.length >= TARGET_REVIEWS) break;
 
@@ -542,8 +537,7 @@
       skipped_empty: skippedEmpty,
       skipped_duplicate: skippedDuplicate,
       rating_unknown: unknownRatings,
-      total_collected: reviews.length,
-      preview
+      total_collected: reviews.length
     };
     diagnostics.push(pageStats);
     if (runId) {

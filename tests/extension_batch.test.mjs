@@ -54,3 +54,16 @@ test('aborting a product run prevents later batches', async () => {
     assert.equal(requests, 1);
   } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
 });
+
+test('malformed batch responses stop without accepting fabricated results', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => url.endsWith('/predict/batch')
+    ? { ok: true, json: async () => ({ results: [null] }) }
+    : { ok: true, json: async () => ({ activity_log: { enabled: true } }) };
+  try {
+    const result = await analyzeReviewBatch([{ text: 'tốt' }], '1.10');
+    assert.equal(result.stopped_early, true);
+    assert.equal(result.completed, 0);
+    assert.match(result.error, /không trả về danh sách/);
+  } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
+});

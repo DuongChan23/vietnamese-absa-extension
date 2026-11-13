@@ -2,8 +2,7 @@
 "use strict";
 
 import { logActivity } from "./activity_service.js";
-
-const API_URL = "http://127.0.0.1:8000";
+import { API_URL } from "./api_config.js";
 const BATCH_SIZE = 10;
 
 /**
@@ -54,20 +53,22 @@ export async function analyzeReviewBatch(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
-        signal,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(600000)]) : AbortSignal.timeout(600000),
       });
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(
-          `HTTP ${response.status}: ${errorBody.slice(0, 300)}`
-        );
+        throw new Error(response.status === 429
+          ? "Gửi quá nhiều yêu cầu. Vui lòng chờ một phút rồi thử lại."
+          : response.status === 503 ? "Máy chủ đang bận hoặc chưa sẵn sàng. Vui lòng thử lại sau."
+            : `Máy chủ trả về lỗi HTTP ${response.status}.`);
       }
 
       const data = await response.json();
       signal?.throwIfAborted();
 
-      if (!Array.isArray(data.results)) {
+      if (!Array.isArray(data.results) || !data.results.every(row =>
+        row && typeof row.text === "string" && ["ok", "error"].includes(row.status)
+      ) || (data.rejected !== undefined && !Array.isArray(data.rejected))) {
         throw new Error("API không trả về danh sách kết quả hợp lệ.");
       }
 
@@ -121,62 +122,5 @@ export async function analyzeReviewBatch(
     results,
     stopped_early: processed < total,
     error: batchError,
-  };
-}
-
-/**
- * Tạo thống kê sơ bộ trên các dự đoán đã nhận.
- * Mỗi aspect được tính một lần theo category gốc.
- * Chưa thực hiện ánh xạ category giữa hai bộ dữ liệu.
- */
-export function summarizeABSA(batchResult) {
-  const sentiments = {
-    positive: 0,
-    neutral: 0,
-    negative: 0,
-  };
-
-  const categories = {};
-  let reviewsWithAspects = 0;
-
-  for (const review of batchResult.results) {
-    if (review.status !== "ok") continue;
-
-    const aspects = Array.isArray(review.aspects)
-      ? review.aspects
-      : [];
-
-    if (aspects.length) reviewsWithAspects++;
-
-    for (const aspect of aspects) {
-      const sentiment = String(aspect.sentiment || "")
-        .toLowerCase();
-
-      const category = String(aspect.category || "UNKNOWN");
-
-      if (!(sentiment in sentiments)) continue;
-
-      sentiments[sentiment]++;
-
-      if (!categories[category]) {
-        categories[category] = {
-          positive: 0,
-          neutral: 0,
-          negative: 0,
-        };
-      }
-
-      categories[category][sentiment]++;
-    }
-  }
-
-  return {
-    reviewsAnalyzed: batchResult.completed,
-    reviewsWithAspects,
-    totalAspects: Object.values(sentiments).reduce(
-      (sum, count) => sum + count, 0
-    ),
-    sentiments,
-    categories,
   };
 }

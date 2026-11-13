@@ -4,8 +4,8 @@
 import { ProductSession, productIdFromUrl } from "./services/product_context.js";
 import { logActivity } from "./services/activity_service.js";
 import { buildAnalytics } from "./services/analytics_service.js";
-
-const API_URL = "http://127.0.0.1:8000";
+import { analyzeReviewBatch } from "./services/batch_service.js";
+import { API_URL } from "./services/api_config.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -62,6 +62,11 @@ let loadedProductRevision = -1;
 const pendingCollections = new Map();
 
 const ERROR_LABELS = {
+  model_not_ready: "Mô hình chưa sẵn sàng. Vui lòng thử lại sau.",
+  server_busy: "Máy chủ đang bận. Vui lòng thử lại sau.",
+  rate_limit_exceeded: "Bạn gửi quá nhiều yêu cầu. Vui lòng chờ một phút.",
+  text_exceeds_model_context: "Bình luận vượt giới hạn từ của mô hình. Hãy chọn đoạn ngắn hơn.",
+  inference_failed: "Máy chủ chưa phân tích được bình luận. Vui lòng thử lại.",
   product_changed: "Sản phẩm đã thay đổi. Hãy phân tích lại sản phẩm hiện tại.",
   product_page_loading: "Trang sản phẩm đang tải. Chờ trang tải xong rồi thử lại.",
   all_rating_filter_not_found: "Không tìm thấy bộ lọc tất cả đánh giá trên trang Shopee.",
@@ -86,9 +91,11 @@ function stopCurrentRun(reason = "user_cancelled") {
   if (!run) return;
   session.cancel();
   pendingCollections.get(run.runId)?.resolve({ ok: false, error: "collection_cancelled" });
-  void chrome.runtime.sendMessage({
-    type: "CANCEL_SHOPEE_COLLECTION", tabId: run.tabId, runId: run.runId
-  }).catch(() => {});
+  if (run.stage === "collecting") {
+    void chrome.runtime.sendMessage({
+      type: "CANCEL_SHOPEE_COLLECTION", tabId: run.tabId, runId: run.runId
+    }).catch(() => {});
+  }
   void logActivity("run_cancelled", run, { reason }, performance.now() - run.started);
   setBusy(false);
 }
@@ -108,8 +115,6 @@ function resetProductView(productId) {
   $("#progressFill").style.width = "0%";
   $("#reviewList").replaceChildren();
   $("#ratingFilters").replaceChildren();
-  $("#results").replaceChildren();
-  $("#review").value = "";
   $("#productName").textContent = productId
     ? "Đang tải sản phẩm hiện tại..." : "Mở trang sản phẩm Shopee để bắt đầu";
   $("#productPrice").textContent = "";
@@ -149,17 +154,18 @@ async function loadProduct(context, revision) {
   }
 }
 
-async function syncActiveProduct(refresh = false) {
+async function syncActiveProduct({ refresh = false, switchProduct = false } = {}) {
   const ticket = ++navigationTicket;
   let tab;
   try { tab = await activeTab(); } catch { tab = null; }
   if (ticket !== navigationTicket) return;
   const nextProductId = productIdFromUrl(tab?.url);
-  if (ticket !== navigationTicket) return;
   const nextKey = `${tab?.id ?? "none"}:${nextProductId ?? "none"}`;
-  const changed = nextKey !== session.context?.key;
+  const canFollow = !session.pinned ||
+    (switchProduct && nextProductId && nextProductId !== session.context?.productId);
+  const changed = canFollow && nextKey !== session.context?.key;
   if (changed) stopCurrentRun("product_changed");
-  session.update(tab);
+  session.update(tab, { switchProduct });
   if (changed) {
     productLoadTicket++;
     productLoading = false;
@@ -167,7 +173,8 @@ async function syncActiveProduct(refresh = false) {
     setStatus(nextProductId ? "Đã chuyển sang sản phẩm hiện tại." : "Hãy mở một trang sản phẩm Shopee.");
     void logActivity("product_changed", session.context, { tab_id: tab?.id ?? null });
   }
-  if (nextProductId && (changed || refresh || loadedProductRevision !== session.revision) &&
+  updateProductControls();
+  if (!session.pinned && nextProductId && (changed || refresh || loadedProductRevision !== session.revision) &&
       !isBusy && !productLoading) {
     await loadProduct({ ...session.context }, session.revision);
   }
@@ -206,10 +213,8 @@ async function refreshLogStatus(force = false) {
 function setBusy(busy) {
   isBusy = busy;
 
-  $("#runAnalysis").disabled = busy;
-  $("#analyze").disabled = busy;
-  $("#fromPage").disabled = busy;
   $("#cancelAnalysis").hidden = !busy;
+  updateProductControls();
 
   document.querySelectorAll(".choice").forEach(button => {
     button.disabled = busy;
@@ -218,6 +223,15 @@ function setBusy(busy) {
   $("#runAnalysis").textContent = busy
     ? "Đang xử lý, vui lòng chờ..."
     : "Phân tích đánh giá sản phẩm";
+}
+
+function updateProductControls() {
+  const viewingAnalyzedProduct = !session.pinned ||
+    session.pageContext?.productId === session.context?.productId;
+  $("#productSwitch").hidden = !session.canSwitchProduct;
+  $("#productLabel").textContent = session.pinned
+    ? "SẢN PHẨM PHÂN TÍCH" : "SẢN PHẨM ĐANG XEM";
+  $("#runAnalysis").disabled = isBusy || !viewingAnalyzedProduct;
 }
 
 function updateProgress(processed, total, label) {
@@ -514,10 +528,15 @@ function renderReviews() {
 
   const results = latestBatchResult?.results || [];
 
-  // Ghép kết quả dự đoán với nội dung bình luận
+  // Match stable IDs first; rejected reviews must not shift identical texts.
+  const byId = new Map();
   const byText = new Map();
 
   for (const result of results) {
+    if (result.review_id != null) {
+      byId.set(String(result.review_id), result);
+      continue;
+    }
     const key = result.text || "";
 
     if (!byText.has(key)) {
@@ -556,6 +575,7 @@ function renderReviews() {
   // Ghép theo thứ tự xuất hiện trên toàn bộ danh sách trước khi lọc sao,
   // để các bình luận trùng nội dung không bị đổi kết quả khi đổi bộ lọc.
   const predictionAtIndex = collectedReviews.map(review => {
+    if (review.review_id != null) return byId.get(String(review.review_id)) || null;
     const key = review.text || "";
     const index = seen.get(key) || 0;
 
@@ -593,9 +613,8 @@ function renderReviews() {
 
     const tags = el("div", "tags");
 
-    for (const aspect of aspectsForResult(
-      predictionAtIndex[index]
-    )) {
+    const prediction = predictionAtIndex[index];
+    for (const aspect of aspectsForResult(prediction)) {
       const key = String(
         aspect.sentiment || "neutral"
       ).toLowerCase();
@@ -613,6 +632,10 @@ function renderReviews() {
     if (tags.childNodes.length) {
       card.append(tags);
     }
+    if (latestBatchResult && prediction?.status !== "ok") {
+      card.append(el("p", "muted small", prediction
+        ? "Không phân tích được bình luận này." : "Bình luận này chưa có kết quả phân tích."));
+    }
 
     list.append(card);
   }
@@ -622,6 +645,7 @@ async function run() {
   if (isBusy) return;
   await syncActiveProduct();
   if (isBusy) return;
+  if (session.pinned && session.pageContext?.productId !== session.context?.productId) return;
   if (!session.context?.productId) {
     setStatus("Hãy mở một trang sản phẩm Shopee trước.", true);
     return;
@@ -708,9 +732,10 @@ async function run() {
       return;
     }
 
-    // Phân tích ABSA bằng Backend hiện tại
-    const { analyzeReviewBatch } =
-      await import("./services/batch_service.js");
+    // From this point onward, navigation only updates the switch prompt.
+    // Keep the collected product through analysis and the resulting dashboard.
+    session.pinForAnalysis(run);
+    updateProductControls();
 
     await assertCurrentRun(run);
     const analysisStarted = performance.now();
@@ -727,7 +752,7 @@ async function run() {
 
     const batchResult = await analyzeReviewBatch(
       collectedReviews,
-      currentProductId,
+      run.productId,
       (p) => {
         if (!session.isCurrent(run)) return;
         updateProgress(
@@ -770,7 +795,9 @@ async function run() {
     updateProgress(
       latestBatchResult.submitted,
       collectedReviews.length,
-      "Đã hoàn thành phân tích"
+      latestBatchResult.stopped_early ? "Đã dừng phân tích" :
+        latestBatchResult.failed ? "Đã phân tích xong, có bình luận bị lỗi" :
+          "Đã hoàn thành phân tích"
     );
     void logActivity("run_completed", run, {
       collected: collectedReviews.length, completed: batchResult.completed,
@@ -779,13 +806,12 @@ async function run() {
 
   } catch (error) {
     if (!session.isCurrent(run)) return;
-    void logActivity("run_failed", run, { error_type: error.name, reason: error.message.slice(0, 150) },
+    void logActivity("run_failed", run, { error_type: error.name },
       performance.now() - run.started);
     setStatus(`Lỗi: ${ERROR_LABELS[error.message] || error.message}`, true);
     $("#progressWrap").hidden = true;
   } finally {
-    if (session.run === run) {
-      session.run = null;
+    if (session.finish(run)) {
       setBusy(false);
     }
   }
@@ -793,7 +819,7 @@ async function run() {
 
 async function checkBackend() {
   try {
-    const response = await fetch(`${API_URL}/health`);
+    const response = await fetch(`${API_URL}/health`, { signal: AbortSignal.timeout(5000) });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -813,7 +839,7 @@ async function checkBackend() {
     if (!isBusy) setStatus(
       data.ready
         ? "Mở sản phẩm Shopee và nhấn Phân tích."
-        : (data.error || "Mô hình chưa sẵn sàng."),
+        : "Mô hình đang khởi động hoặc chưa sẵn sàng. Vui lòng thử lại sau.",
       !data.ready
     );
 
@@ -822,7 +848,7 @@ async function checkBackend() {
     $("#connection").className = "connection error";
 
     if (!isBusy) setStatus(
-      "Không kết nối được FastAPI tại 127.0.0.1:8000.",
+      `Không kết nối được Backend tại ${API_URL}.`,
       true
     );
   }
@@ -852,135 +878,21 @@ document.querySelectorAll(".choice").forEach(
 );
 
 $("#runAnalysis").addEventListener("click", run);
+$("#switchProduct").addEventListener("click", async () => {
+  if (!session.canSwitchProduct) return;
+  await syncActiveProduct({ switchProduct: true });
+});
 $("#cancelAnalysis").addEventListener("click", () => {
   stopCurrentRun();
   $("#progressWrap").hidden = true;
   setStatus("Đã dừng. Yêu cầu model đã gửi có thể hoàn tất ở Backend; kết quả sẽ được bỏ qua.");
 });
 
-// Lấy văn bản người dùng chọn
-$("#fromPage").addEventListener("click", async () => {
-  const revision = session.revision;
-  try {
-    const tab = await activeTab();
-
-    const injected = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => window.getSelection()?.toString() || ""
-    });
-    await syncActiveProduct();
-    if (revision !== session.revision) return;
-
-    const text = injected?.[0]?.result?.trim();
-
-    if (!text) {
-      throw new Error(
-        "Hãy bôi đen một đoạn trên trang trước."
-      );
-    }
-
-    $("#review").value = text.slice(0, 3000);
-    setStatus("Đã lấy văn bản được chọn.");
-
-  } catch (error) {
-    if (revision !== session.revision) return;
-    setStatus(`Lỗi: ${error.message}`, true);
-  }
-});
-
-// Phân tích một bình luận riêng
-$("#analyze").addEventListener("click", async () => {
-  if (isBusy) return;
-  await syncActiveProduct();
-  if (isBusy) return;
-  const text = $("#review").value.trim();
-
-  if (!text) {
-    setStatus("Hãy nhập một bình luận.", true);
-    return;
-  }
-
-  const run = session.begin();
-  run.started = performance.now();
-  setBusy(true);
-  void logActivity("manual_analysis_started", run, { text_chars: text.length });
-  $("#results").replaceChildren();
-
-  try {
-    const response = await fetch(`${API_URL}/predict`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text,
-        source: "unified",
-        run_id: run.runId,
-        product_id: run.productId || null
-      }),
-      signal: run.signal
-    });
-
-    const data = await response.json();
-    await assertCurrentRun(run);
-
-    if (!response.ok) {
-      throw new Error(
-        JSON.stringify(data.detail || data)
-      );
-    }
-
-    const aspects = aspectsForResult(data);
-
-    for (const aspect of aspects) {
-      const key = String(
-        aspect.sentiment || "neutral"
-      ).toLowerCase();
-
-      $("#results").append(
-        el(
-          "span",
-          `tag ${key}`,
-          `${aspect.aspect || ""} · ` +
-          `${categoryName(aspect.category)} · ` +
-          `${SENTIMENT_LABELS[key] || key}`
-        )
-      );
-    }
-
-    if (!aspects.length) {
-      $("#results").append(
-        el(
-          "p",
-          "empty",
-          "Chưa phát hiện khía cạnh rõ ràng."
-        )
-      );
-    }
-
-    setStatus(
-      `Đã tìm thấy ${aspects.length} aspect.`
-    );
-    void logActivity("manual_analysis_completed", run, { aspects: aspects.length },
-      performance.now() - run.started);
-
-  } catch (error) {
-    if (!session.isCurrent(run)) return;
-    void logActivity("manual_analysis_failed", run, { error_type: error.name },
-      performance.now() - run.started);
-    setStatus(`Lỗi ABSA: ${error.message}`, true);
-  } finally {
-    if (session.run === run) {
-      session.run = null;
-      setBusy(false);
-    }
-  }
-});
-
 chrome.tabs.onActivated.addListener(() => { void syncActiveProduct(); });
 chrome.tabs.onUpdated.addListener((tabId, change) => {
-  if (tabId === session.context?.tabId && (change.url || change.status === "complete")) {
-    void syncActiveProduct(change.status === "complete");
+  if ([session.context?.tabId, session.pageContext?.tabId].includes(tabId) &&
+      (change.url || change.status === "complete")) {
+    void syncActiveProduct({ refresh: change.status === "complete" });
   }
 });
 chrome.windows.onFocusChanged.addListener(() => { void syncActiveProduct(); });
@@ -997,7 +909,7 @@ chrome.runtime.onMessage.addListener(message => {
     return;
   }
   const run = session.run;
-  if (message?.type !== "ABSA_COLLECTION_PROGRESS" || !run ||
+  if (message?.type !== "ABSA_COLLECTION_PROGRESS" || !run || run.stage !== "collecting" ||
       message.run_id !== run.runId || message.product_id !== run.productId) return;
   const stats = message.stats || {};
   updateProgress(stats.collected || 0, selectedLimit === "all" ? 0 : selectedLimit,

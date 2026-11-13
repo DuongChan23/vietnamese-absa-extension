@@ -40,6 +40,7 @@ def load_handlers():
     }):
         spec.loader.exec_module(module)
     module.log_event = Mock(return_value=True)
+    module.logger = Mock()
     return module
 
 

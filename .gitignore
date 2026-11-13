@@ -1,9 +1,11 @@
-
 # Python virtual environment
 .venv/
+.test-venv/
+.ruff_cache/
 venv/
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
 
 # Environment and credentials
@@ -12,6 +14,12 @@ __pycache__/
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+.aws/
+.ssh/
+id_rsa
+id_ed25519
 
 # Trained AI models
 models/
@@ -23,13 +31,17 @@ models/
 *.faiss
 
 # VnCoreNLP runtime files
-vncorenlp/
+/vncorenlp/
+/VnCoreNLP/
 
 # Datasets and evaluation exports
 data/
 exports/
 tests/reference/
 *.jsonl
+/category_audit_report.json
+/active/
+.ipynb_checkpoints/
 
 # Logs and temporary files
 logs/
@@ -37,6 +49,8 @@ logs/
 tmp/
 temp/
 .cache/
+dist/
+/.test-docker-config/
 
 # Editor and operating system
 .vscode/

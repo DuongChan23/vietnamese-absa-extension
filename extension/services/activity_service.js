@@ -1,6 +1,6 @@
 "use strict";
 
-const API_URL = "http://127.0.0.1:8000";
+import { API_URL } from "./api_config.js";
 
 export function createActivityClient({
   fetchImpl = (...args) => fetch(...args),
