@@ -30,10 +30,6 @@ models/
 *.onnx
 *.faiss
 
-# VnCoreNLP runtime files
-/vncorenlp/
-/VnCoreNLP/
-
 # Datasets and evaluation exports
 data/
 exports/
@@ -57,3 +53,7 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Include bundled VnCoreNLP models; exclude build output
+!/VnCoreNLP/models/
+/VnCoreNLP/target/
