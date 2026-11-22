@@ -22,7 +22,7 @@
       <div class="product-row">
         <div class="product-art" aria-hidden="true">▤</div>
         <div class="product-copy">
-          <p class="eyebrow">SẢN PHẨM ĐANG XEM</p>
+          <p id="productLabel" class="eyebrow">SẢN PHẨM ĐANG XEM</p>
           <h2 id="productName">
             Mở trang sản phẩm Shopee để bắt đầu
           </h2>
@@ -33,10 +33,19 @@
         </div>
       </div>
 
+      <div id="productSwitch" class="product-switch" hidden>
+        <p class="small muted" role="status">
+          Bạn đang xem sản phẩm khác trên Shopee. Extension vẫn giữ phân tích của sản phẩm này.
+        </p>
+        <button id="switchProduct" class="secondary" type="button">
+          Đổi sản phẩm
+        </button>
+      </div>
+
       <div class="divider"></div>
 
       <label class="field-label" for="reviewLimit">
-        Số bình luận cần phân tích
+        Số bình luận có nội dung cần phân tích
       </label>
 
       <div id="limitChoices" class="choice-row"
@@ -47,12 +56,18 @@
                 data-limit="100" aria-pressed="true">100</button>
         <button type="button" class="choice"
                 data-limit="200">200</button>
+        <button type="button" class="choice"
+                data-limit="all" aria-pressed="false">Tất cả</button>
       </div>
 
       <input id="reviewLimit" type="hidden" value="100">
+      <p class="footnote">Chỉ lấy lời bình của người mua; bỏ đánh giá chỉ có sao. “Tất cả” lấy hết bình luận có nội dung tải được.</p>
 
       <button id="runAnalysis" class="primary" type="button">
         Phân tích đánh giá sản phẩm
+      </button>
+      <button id="cancelAnalysis" class="secondary cancel" type="button" hidden>
+        Dừng xử lý
       </button>
 
       <div id="progressWrap" class="progress-wrap" hidden>
@@ -69,6 +84,7 @@
         Đang kiểm tra Backend...
       </p>
       <p id="collectionInfo" class="small muted" hidden></p>
+      <p id="logStatus" class="footnote" role="status" hidden></p>
     </section>
 
     <div id="dashboard" hidden>
@@ -86,7 +102,7 @@
 
       <section class="card">
         <div class="section-head">
-          <h2>Phân bố số sao</h2>
+          <h2>Số sao trên Shopee</h2>
           <span id="ratingSample" class="chip"></span>
         </div>
 
@@ -99,8 +115,8 @@
           <div id="ratingBars" class="rating-bars"></div>
         </div>
 
-        <p class="footnote">
-          Chỉ tính trên các bình luận đã thu thập.
+        <p id="ratingNote" class="footnote">
+          Số liệu Shopee, gồm cả đánh giá chỉ có sao.
         </p>
       </section>
 
@@ -127,31 +143,11 @@
       </section>
     </div>
 
-    <details class="manual card">
-      <summary>Phân tích một đoạn đánh giá riêng</summary>
-      <label class="field-label" for="review">
-        Nội dung đánh giá
-      </label>
-
-      <textarea id="review" rows="3" maxlength="3000"
-        placeholder="Dán bình luận hoặc chọn văn bản trên Shopee..."></textarea>
-
-      <div class="manual-actions">
-        <button id="fromPage" class="secondary" type="button">
-          Lấy văn bản chọn
-        </button>
-        <button id="analyze" class="secondary" type="button">
-          Phân tích
-        </button>
-      </div>
-      <div id="results" class="manual-results"></div>
-    </details>
-
     <footer>
       Phân tích dựa trên bình luận đã thu thập ·
       Kết quả AI có thể sai sót
     </footer>
   </main>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>

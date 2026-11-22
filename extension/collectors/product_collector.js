@@ -111,7 +111,7 @@
 
   const match = url.pathname.match(
     /-i\.(\d+)\.(\d+)(?:\/|$)/
-  );
+  ) || url.pathname.match(/^\/product\/(\d+)\/(\d+)(?:\/|$)/);
 
   const shopId =
     match?.[1] ||
@@ -131,17 +131,28 @@
   }
 
   const schema = getProductSchema();
+  // Shopee SPA navigation can leave the previous product's JSON-LD briefly.
+  const identityUrls = [schema.url, schema["@id"], meta(["og:url"]),
+    document.querySelector('link[rel="canonical"]')?.href];
+  for (const identityUrl of identityUrls) {
+    if (typeof identityUrl !== "string") continue;
+    const schemaMatch = identityUrl.match(/-i\.(\d+)\.(\d+)(?:[/?#]|$)/) ||
+      identityUrl.match(/\/product\/(\d+)\/(\d+)(?:[/?#]|$)/);
+    if (schemaMatch && `${schemaMatch[1]}.${schemaMatch[2]}` !== `${shopId}.${itemId}`) {
+      return { ok: false, error: "product_page_loading" };
+    }
+  }
 
   // =====================================================
   // 4. PRODUCT NAME
   // =====================================================
 
   const name =
-    clean(schema.name) ||
     firstText([
       '[data-testid="pdp-product-name"]',
       "h1",
     ]) ||
+    clean(schema.name) ||
     meta(["og:title", "twitter:title"]) ||
     clean(document.title) ||
     null;
@@ -331,33 +342,7 @@
   // =====================================================
 
   function parseCompactNumber(raw) {
-    const value = clean(raw)
-      .toLowerCase()
-      .replace(/\s/g, "");
-
-    if (!value) return null;
-
-    if (/[km]$/.test(value)) {
-      const unit = value.slice(-1);
-      const base = Number(
-        value.slice(0, -1).replace(",", ".")
-      );
-
-      if (!Number.isFinite(base)) return null;
-
-      return Math.round(
-        base * (unit === "k" ? 1000 : 1000000)
-      );
-    }
-
-    // Examples: 2.634 -> 2634, 2634 -> 2634
-    if (/^\d{1,3}(?:[.,]\d{3})+$/.test(value)) {
-      return Number(value.replace(/[.,]/g, ""));
-    }
-
-    if (/^\d+$/.test(value)) return Number(value);
-
-    return null;
+    return globalThis.__absaReviewHelpers.parseCount(raw)?.value ?? null;
   }
 
   function getReviewCount() {
@@ -422,6 +407,11 @@
   }
 
   const reviewCountResult = getReviewCount();
+  const rating = getRating();
+  const ratingSummary = globalThis.__absaReviewHelpers.readShopeeRatingSummary(document, {
+    average: rating,
+    total: schema.aggregateRating?.ratingCount ?? reviewCountResult?.value ?? null
+  });
 
   // =====================================================
   // 8. PRODUCT DESCRIPTION
@@ -454,7 +444,8 @@
     price_text: priceResult?.value ?? null,
     price_source: priceResult?.source ?? null,
 
-    rating: getRating(),
+    rating,
+    rating_summary: ratingSummary,
 
     review_count: reviewCountResult?.value ?? null,
     review_count_source:
@@ -468,7 +459,7 @@
       name: Boolean(name),
       price: Boolean(priceResult),
       description: Boolean(description),
-      rating: getRating() !== null,
+      rating: rating !== null,
       review_count: Boolean(reviewCountResult),
     },
   };

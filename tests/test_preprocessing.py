@@ -36,5 +36,12 @@ class PreprocessingTests(unittest.TestCase):
         rows = [{'product_id':'p1', 'review_id': 1, 'text':'A'}, {'product_id':'p2','review_id':1,'text':'B'}]
         self.assertEqual(prepare_reviews(rows)['stats']['accepted'], 2)
 
+    def test_review_and_product_ids_cannot_inflate_or_inject_logs(self):
+        for field in ('review_id', 'product_id'):
+            for value in ('x' * 101, 'line\ninjection', {'nested': 'object'}, True):
+                with self.subTest(field=field, value=value):
+                    result = prepare_reviews([{'text': 'tốt', field: value}])
+                    self.assertEqual(result['rejected'][0]['reason'], f'invalid_{field}')
+
 if __name__ == '__main__':
     unittest.main()
