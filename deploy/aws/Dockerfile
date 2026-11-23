@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ABSA_VNCORENLP_DIR=/app/vncorenlp \
     HF_HOME=/app/.cache/huggingface \
     TOKENIZERS_PARALLELISM=false \
-    TMPDIR=/tmp
+    TMPDIR=/tmp \
+    HOME=/tmp
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates openjdk-17-jre-headless \
