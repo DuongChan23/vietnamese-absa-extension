@@ -881,7 +881,7 @@ async function run() {
     await assertCurrentRun(run);
     latestBatchResult = batchResult;
     latestRunMetadata.finished_at = new Date().toISOString();
-    latestRunMetadata.status = batchResult.stopped_early ? "partial" : "completed";
+    latestRunMetadata.status = batchResult.stopped_early ? "partial" : batchResult.failed ? "completed_with_errors" : "completed";
     void logActivity("analysis_completed", run, {
       completed: batchResult.completed, failed: batchResult.failed,
       stopped_early: batchResult.stopped_early
