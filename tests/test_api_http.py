@@ -53,13 +53,19 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.model.predict_unified.call_count, 2)
 
     def test_source_conditioned_single_and_batch_use_the_selected_taxonomy(self):
-        raw = [
+        clothing_prediction = [
             {
                 "start": 0, "end": 3, "aspect": "vải",
                 "category": "Material", "sentiment": "positive",
             }
         ]
-        self.model.predict.return_value = raw
+        phone_prediction = [
+            {
+                "start": 0, "end": 3, "aspect": "Pin",
+                "category": "BATTERY", "sentiment": "positive",
+            }
+        ]
+        self.model.predict.return_value = clothing_prediction
 
         single = self.client.post("/predict", json={
             "text": "Vải mềm", "source": "vicloabsa",
@@ -77,6 +83,7 @@ class HTTPTests(unittest.TestCase):
         )
 
         self.model.predict.reset_mock()
+        self.model.predict.return_value = phone_prediction
         batch = self.client.post("/predict/batch", json={
             "source": "visd4sa",
             "reviews": [{"review_id": "phone-1", "text": "Pin tốt", "rating": 5}],
@@ -84,8 +91,8 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(batch.status_code, 200)
         self.model.predict.assert_called_once_with("Pin tốt", "visd4sa")
         row = batch.json()["results"][0]
-        self.assertEqual(row["aspects"], raw)
-        self.assertEqual(row["aspects_merged"][0]["category"], "Material")
+        self.assertEqual(row["aspects"], phone_prediction)
+        self.assertEqual(row["aspects_merged"][0]["category"], "BATTERY")
         self.assertEqual(row["aspects_merged"][0]["sources"], ["visd4sa"])
 
     def test_empty_null_and_oversized_text_are_rejected_before_model(self):
