@@ -1,5 +1,6 @@
 """Tests for source-preserving ABSA category normalization and merging."""
 
+from copy import deepcopy
 import unittest
 
 from backend.category_normalizer import (
@@ -165,6 +166,7 @@ class CategoryMergeTests(unittest.TestCase):
             "rejected": [],
         }
 
+        raw_aspects = deepcopy(response["results"][0]["aspects"])
         result = enrich_batch_response(response, source="visd4sa")
 
         self.assertEqual(result["category_merge_policy"], MERGE_POLICY)
@@ -175,7 +177,8 @@ class CategoryMergeTests(unittest.TestCase):
             ["SER&ACC", "Service"],
         )
         self.assertNotIn("aspects_merged", response["results"][0])
-        self.assertNotIn("sources", response["results"][0]["aspects"][0])
+        self.assertEqual(response["results"][0]["aspects"], raw_aspects)
+        self.assertEqual(result["results"][0]["aspects"], raw_aspects)
 
     def test_batch_response_requires_results_list(self):
         with self.assertRaisesRegex(ValueError, "results list"):

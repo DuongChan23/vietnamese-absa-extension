@@ -16,11 +16,11 @@
 - Thêm timeout cho health và từng batch (5 giây / 10 phút). Hủy ở client không dừng phép suy luận đã chạy trên server.
 - Rút gọn analytics, xóa `summarizeABSA` và các hàm xuất CSV không còn được UI sử dụng; dùng chung hàm đọc số Shopee; không tạo thêm preview chứa nội dung bình luận trên mỗi trang.
 - Bỏ quyền `tabs` và `activeTab`: host permissions Shopee vẫn cho phép đọc URL sản phẩm và chạy collector; đã bỏ tính năng nhập riêng hoặc lấy văn bản được chọn để phân tích. Gói ZIP chỉ lấy tài nguyên extension theo loại file cho phép, kiểm tra hostname HTTPS và loại đường dẫn symlink. Không nhúng khóa API hay SSH.
-- Docker dùng một worker, giữ cổng host tại localhost, bỏ Linux capabilities, cấm nâng quyền, bỏ bộ công cụ biên dịch sau khi cài và bổ sung protobuf. Các phiên bản API đã kiểm thử được ghim trong constraints.
+- Docker chạy một worker; API chỉ bind vào localhost trên host, bỏ Linux capabilities, bật no-new-privileges và dùng filesystem chỉ đọc với volume ghi riêng cho cache/log. Dockerfile cài Java 17 JRE và PyTorch CPU; `deploy/aws/constraints.txt` ghim PyTorch 2.10.0 và Transformers 4.57.6, các thư viện API còn lại tuân theo dải phiên bản trong `backend/requirements.txt`.
 
 ## Kiểm chứng
 
-Kết quả tại workspace: **65 kiểm thử Python và 53 kiểm thử extension đạt**, kiểm tra lỗi Python bằng Ruff và cú pháp JavaScript đạt, Compose ghép Oracle/AWS hợp lệ. Hash ba checkpoint NB20/NB39/NB46 khớp các giá trị đã ghi trong README/policy; các file VnCoreNLP cần thiết có mặt.
+Kết quả **65 kiểm thử Python và 53 kiểm thử Extension** là số liệu workspace được ghi nhận trước đợt sửa lỗi test/deployment hiện tại; không dùng nó làm xác nhận cho revision mới. Workflow của PR #6 đã được kích hoạt và chạy lại, nhưng các job đều kết thúc trước khi GitHub cung cấp step summary hoặc log; vì vậy CI hiện **không kết luận được** test có chạy hay không. Hash ba checkpoint NB20/NB39/NB46 vẫn phải được đối chiếu riêng trên máy có đủ model; kiểm thử unit không nạp checkpoint thật.
 
 Chạy từ gốc dự án, trong môi trường Python riêng nếu `.venv` cũ bị lỗi:
 
@@ -30,7 +30,7 @@ py -3.12 -m venv .test-venv
 .\.test-venv\Scripts\python.exe -m unittest discover -s tests -p 'test_*.py'
 node --test tests/extension_*.test.mjs
 .\.test-venv\Scripts\ruff.exe check backend deploy tests --select E9,F63,F7,F82,F401
-docker compose -f deploy/oracle/compose.yaml -f deploy/aws/compose.override.yaml config --quiet
+docker compose -f deploy/aws/compose.yaml -f deploy/aws/compose.override.yaml config --quiet
 ```
 
 Bộ kiểm thử gồm HTTP FastAPI/Pydantic thật, kiểm thử hồi quy thuật toán với model giả lập, thu thập DOM giả lập, chuyển sản phẩm, hủy tác vụ, cache và đóng gói ZIP. Các phép thử này không đo chất lượng AI hoặc hiệu năng checkpoint thực trên EC2.
@@ -41,7 +41,7 @@ Bộ kiểm thử gồm HTTP FastAPI/Pydantic thật, kiểm thử hồi quy thu
 2. Đặt `ABSA_EXTENSION_IDS` trong `deploy/aws/.env` bằng ID thật, phân cách bằng dấu cách nếu có nhiều bản; tạo lại container API sau khi sửa. Không dùng khóa bí mật được nhúng trong extension làm cơ chế xác thực.
 3. Chạy `/health` và dự đoán bằng model thật trên EC2, theo dõi RAM/OOM và thử nhiều client đồng thời. Gói hiện tại dùng API 6 GiB trên VM 8 GiB; cần đo để biết đủ RAM hay không.
 4. Đối chiếu kết quả trước/sau và benchmark trên máy chủ nếu muốn tăng encoder batch. Không chuyển profile từ Windows sang EC2.
-5. Tạo ZIP bằng hostname thật: `python -m deploy.oracle.package_extension --api-url https://TEN_MIEN_CUA_BAN --output dist/extension-aws.zip`. Giải nén và Load unpacked trên Chrome 120+; thử Shopee thật, nhiều trang bình luận, lỗi mạng, hủy và chuyển sản phẩm.
+5. Tạo ZIP bằng hostname thật: `python -m deploy.aws.package_extension --api-url https://TEN_MIEN_CUA_BAN --output dist/extension-aws.zip`. Giải nén và Load unpacked trên Chrome 120+; thử Shopee thật, nhiều trang bình luận, lỗi mạng, hủy và chuyển sản phẩm.
 6. Chuẩn bị icon/ảnh store, thông tin hỗ trợ, chính sách quyền riêng tư và công bố việc gửi nội dung bình luận đến API AWS. Hiện chưa có đủ thông tin chủ sở hữu/tên miền để hoàn thiện hồ sơ store.
 
 Giới hạn Origin và rate limit cục bộ không phải xác thực người dùng hay chống DDoS. Client ngoài trình duyệt có thể giả Origin. Nếu cần tài khoản/quota hoặc nhiều instance, phải bổ sung xác thực phía server và giới hạn tải dùng chung. Caddy là proxy được tin cậy trong mạng Docker; giữ API port bind localhost và không cho container không tin cậy tham gia mạng này.

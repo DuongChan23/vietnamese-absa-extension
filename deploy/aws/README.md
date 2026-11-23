@@ -115,8 +115,8 @@ sudo docker run --rm hello-world
 ```
 
 [Hướng dẫn Docker](https://docs.docker.com/engine/install/ubuntu/).
-Python/JDK/thư viện ML sẽ được cài bên trong image; không phải cài lại từng
-thư viện Python lên host Ubuntu.
+Python, Java Runtime Environment (JRE) và thư viện ML sẽ được cài bên trong
+image; không phải cài lại từng thư viện Python lên host Ubuntu.
 
 ## 5. Nén và chuyển code/model
 
@@ -127,7 +127,10 @@ Set-Location 'C:\Users\admin\Desktop\vietnamese-absa-extension'
 $Ec2Key = 'C:\Users\admin\Downloads\absa-ec2.pem'
 $Ec2Ip = 'PUBLIC_IP_CUA_EC2'
 New-Item -ItemType Directory -Force dist | Out-Null
-tar -czf dist/absa-code.tar.gz --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' --exclude='*/.env' backend deploy .dockerignore tests/fixtures
+New-Item -ItemType Directory -Force vncorenlp\models\wordsegmenter | Out-Null
+Copy-Item .\VnCoreNLP\VnCoreNLP-1.2.jar .\vncorenlp\
+Copy-Item .\VnCoreNLP\models\wordsegmenter\* .\vncorenlp\models\wordsegmenter\
+tar -czf dist/absa-code.tar.gz --exclude='__pycache__' --exclude='*.pyc' --exclude='.env' --exclude='*/.env' backend deploy/aws .dockerignore tests/fixtures
 tar -czf dist/absa-models.tar.gz models/ate_category_conditioned_v1 models/absa_joint_biaffine_span_pair_v1 models/absa_joint46_boundary_ranking_pilot_v1 models/phobert_asc_training
 tar -czf dist/absa-vncorenlp.tar.gz -C vncorenlp VnCoreNLP-1.2.jar models/wordsegmenter
 scp -i $Ec2Key dist/absa-code.tar.gz dist/absa-models.tar.gz dist/absa-vncorenlp.tar.gz "ubuntu@${Ec2Ip}:~/absa/"
@@ -151,9 +154,10 @@ sudo bash deploy/aws/compose.sh up -d --build api
 sudo bash deploy/aws/compose.sh logs -f api
 ```
 
-`compose.sh` tái sử dụng image/HTTPS stack trong `deploy/oracle`, áp dụng
-override AWS **6 GiB RAM, 2 CPU** cho API và project name riêng `absa-aws`.
-Không chạy Compose Oracle một mình trên máy 8 GiB vì cấu hình gốc đặt 10 GiB.
+`deploy/aws/compose.yaml` là stack độc lập, gồm Dockerfile API, volume riêng
+cho model/cache/log và Caddy tùy chọn trong profile `https`. Wrapper
+`compose.sh` dùng chính file Compose này cùng override giới hạn API ở
+**6 GiB RAM, 2 CPU** cho EC2 8 GiB; không phụ thuộc thư mục `deploy/oracle`.
 
 Chỉ một worker nạp model. Checkpoint/Java data được mount chỉ đọc, cache
 Hugging Face và log được giữ ngoài image. Lần đầu tải/cài có thể mất nhiều
@@ -277,7 +281,7 @@ mọi người cài extension.
 Ở gốc project trên **Windows**:
 
 ```powershell
-.\.venv\Scripts\python.exe -m deploy.oracle.package_extension --api-url https://TEN_MIEN_CUA_BAN --output dist/extension-aws.zip
+.\.venv\Scripts\python.exe -m deploy.aws.package_extension --api-url https://TEN_MIEN_CUA_BAN --output dist/extension-aws.zip
 ```
 
 Dùng lại công cụ đóng gói chung: file ZIP trỏ API sang AWS và có host permission
@@ -302,9 +306,11 @@ Nguồn: [Stop/Start EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/St
 
 ## 10. Trạng thái và phạm vi kiểm tra
 
-Cấu hình ghép Compose đã kiểm tra cấu trúc, wrapper Bash đã kiểm tra cú pháp.
-Chưa tạo tài nguyên AWS hoặc build/chạy container trên EC2 trong quá trình
-chuẩn bị này. Các bước 5–6 là phần kiểm chứng thực tế sau khi bạn tạo máy.
+Stack Compose AWS hiện được định nghĩa độc lập trong thư mục này; workflow CI
+được cấu hình để kiểm tra cú pháp wrapper Bash và cấu hình Compose. Lượt chạy
+CI hiện tại chưa cung cấp step log nên các kiểm tra đó chưa được xác nhận là đã
+thực thi. Chưa tạo tài nguyên AWS hoặc build/chạy container trên EC2; các bước
+5–6 vẫn là phần kiểm chứng thực tế sau khi bạn tạo máy.
 
 Docker dùng PyTorch CPU 2.10.0/Transformers 4.57.6, có thể khác môi trường
 Windows hiện tại; cần đối chiếu đầu ra trước khi khẳng định kết quả giống

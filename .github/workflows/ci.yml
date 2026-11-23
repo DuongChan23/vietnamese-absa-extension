@@ -43,6 +43,10 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Compile Python modules
         run: python -m compileall -q backend deploy
+      - name: Validate AWS deployment wrapper
+        run: bash -n deploy/aws/compose.sh
+      - name: Validate AWS Docker Compose configuration
+        run: docker compose -f deploy/aws/compose.yaml -f deploy/aws/compose.override.yaml config --quiet
       - name: Run Python tests
         run: python -m unittest discover -s tests -p "test_*.py" -v
 

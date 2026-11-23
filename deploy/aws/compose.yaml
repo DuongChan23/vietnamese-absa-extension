@@ -1,0 +1,74 @@
+name: absa-aws
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/aws/Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      ABSA_MODELS_DIR: /app/models
+      ABSA_VNCORENLP_DIR: /app/vncorenlp
+      ABSA_EXTENSION_IDS: ${ABSA_EXTENSION_IDS:-}
+      HF_HOME: /app/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+      TMPDIR: /tmp
+      HOME: /tmp
+    volumes:
+      - type: bind
+        source: ../../models
+        target: /app/models
+        read_only: true
+      - type: bind
+        source: ../../vncorenlp
+        target: /app/vncorenlp
+        read_only: true
+      - absa_logs:/app/logs
+      - hf_cache:/app/.cache/huggingface
+    ports:
+      - "127.0.0.1:8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)); raise SystemExit(0 if data.get('ready') else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10m
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - https
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      ABSA_DOMAIN: ${ABSA_DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  absa_logs:
+  hf_cache:
+  caddy_data:
+  caddy_config:

@@ -40,8 +40,9 @@ Cơ chế ánh xạ checkpoint được mô tả trong
 ## Kiểm chứng thực tế tại workspace
 
 - 65 kiểm thử Python đạt; 53 kiểm thử extension đạt.
-- Ruff kiểm tra E9,F63,F7,F82,F401 đạt; cấu hình Compose Oracle + AWS hợp
-  lệ; Bash wrapper qua kiểm tra cú pháp.
+- Ruff kiểm tra E9,F63,F7,F82,F401 đạt trong lần rà soát trước; workflow mới
+  có bước kiểm tra AWS Compose độc lập và Bash wrapper. GitHub Actions hiện
+  không trả về step logs, nên chưa xác nhận các bước CI mới đã thực thi.
 - Cài dependency kiểm thử theo `requirements-dev.txt` vì môi trường
   `.venv` thiếu HTTP client; không sửa dependency production vì lỗi này.
 - Đối chiếu checkpoint thật trước/sau: 30 bình luận trong fixture,

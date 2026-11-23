@@ -1,4 +1,4 @@
-# Reuse the existing Docker/HTTPS stack, with a memory budget for an 8 GiB VM.
+# Keep the standalone AWS API service within the initial 8 GiB EC2 memory budget.
 services:
   api:
     mem_limit: 6g
