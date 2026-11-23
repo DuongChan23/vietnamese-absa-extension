@@ -36,7 +36,7 @@ class DomainClassifierTests(unittest.TestCase):
     def test_brand_only_requires_user_confirmation(self):
         result = detect_product_domain({"name": "Coolmate"})
         self.assertEqual(result["suggested_source"], "vicloabsa")
-        self.assertEqual(result["source"], "vicloabsa")
+        self.assertIsNone(result["source"])
         self.assertEqual(result["status"], "confirmation_required")
         self.assertGreaterEqual(result["confidence"], CONFIRM_THRESHOLD)
         self.assertLess(result["confidence"], AUTO_THRESHOLD)
