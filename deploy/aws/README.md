@@ -306,10 +306,11 @@ Nguồn: [Stop/Start EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/St
 
 ## 10. Trạng thái và phạm vi kiểm tra
 
-Stack Compose AWS hiện được định nghĩa độc lập trong thư mục này; CI kiểm tra
-cú pháp wrapper Bash và cấu hình Compose. Chưa tạo tài nguyên AWS hoặc build/
-chạy container trên EC2 trong quá trình chuẩn bị này. Các bước 5–6 vẫn là phần
-kiểm chứng thực tế sau khi bạn tạo máy.
+Stack Compose AWS hiện được định nghĩa độc lập trong thư mục này; workflow CI
+được cấu hình để kiểm tra cú pháp wrapper Bash và cấu hình Compose. Lượt chạy
+CI hiện tại chưa cung cấp step log nên các kiểm tra đó chưa được xác nhận là đã
+thực thi. Chưa tạo tài nguyên AWS hoặc build/chạy container trên EC2; các bước
+5–6 vẫn là phần kiểm chứng thực tế sau khi bạn tạo máy.
 
 Docker dùng PyTorch CPU 2.10.0/Transformers 4.57.6, có thể khác môi trường
 Windows hiện tại; cần đối chiếu đầu ra trước khi khẳng định kết quả giống
