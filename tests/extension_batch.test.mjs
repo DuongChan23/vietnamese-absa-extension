@@ -29,6 +29,7 @@ test('batch requests include run/product IDs and log progress without changing r
     assert.equal(requests[0].product_id, '1.10');
     assert.deepEqual(progress, [10, 20, 21]);
     assert.equal(result.completed, 21);
+    assert.equal(result.model, 'NB39+NB46+NB04');
     assert.equal(result.source, 'vicloabsa');
     await flushActivityLog();
     assert.equal(logs.filter(row => row.event === 'analysis_batch_completed').length, 3);
