@@ -205,7 +205,7 @@ def _result(source:str|None,confidence:float,method:str,evidence:list[str],*,rea
   selected_source=source
  else:
   status="confirmation_required"
-  selected_source=source
+  selected_source=None
  return {
   "source":selected_source,
   "suggested_source":source if source in ALLOWED_SOURCES else None,
