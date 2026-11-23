@@ -26,7 +26,7 @@ The detector does not alter NB39, NB46, NB04, model weights, preprocessing, span
 | 0.65–0.899 | confirmation_required | Show the recommendation; user must confirm/select |
 | Below 0.65 or conflicting evidence | unknown | Do not run inference until the user selects a domain |
 
-Rule-based scores are heuristic confidence scores, not statistically calibrated probabilities. They must be calibrated on a labeled product validation set before being interpreted as probabilities.
+Rule-based scores are heuristic confidence scores, not statistically calibrated probabilities. They must be calibrated on a labeled product validation set before being interpreted as probabilities. For `confirmation_required`, the API returns `source: null` and places the recommendation in `suggested_source`; the Extension must not treat the suggestion as selected until the user confirms it.
 
 ## Category ID mapping
 
