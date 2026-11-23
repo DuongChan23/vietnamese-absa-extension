@@ -48,8 +48,9 @@ class APIActivityTests(unittest.TestCase):
     def test_batch_logs_review_timings_cache_hits_and_errors_with_correct_context(self):
         api = load_handlers()
         contexts = []
-        def infer(text):
+        def infer(text, source):
             contexts.append(dict(activity_log._context.get()))
+            self.assertEqual(source, 'vicloabsa')
             if text == 'fail':
                 raise RuntimeError('test failure')
             return []
