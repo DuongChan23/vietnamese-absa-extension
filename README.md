@@ -390,17 +390,15 @@ FP32 batched vẫn có thể lệch số thực nhỏ so với tuần tự; kế
 đã thử không bảo đảm khớp mọi văn bản mới. Nên chạy lại đối chiếu bằng dữ liệu
 đại diện thực tế khi đổi môi trường hoặc tập review.
 
-### Triển khai Oracle Cloud Always Free
-
-Hướng dẫn đăng ký, tạo VM ARM, chuyển model, chạy Docker, bật HTTPS và tạo ZIP
-extension kết nối máy chủ nằm trong [deploy/oracle/README.md](deploy/oracle/README.md).
-Bản trong workspace mặc định vẫn dùng backend localhost.
-
 ### Triển khai AWS EC2
 
 Hướng dẫn dùng tài khoản AWS có credit, EC2 Ubuntu 8 GiB, chuyển checkpoint,
-bật HTTPS và tạo ZIP extension nằm trong [deploy/aws/README.md](deploy/aws/README.md).
-Cấu hình AWS tái sử dụng Docker stack có sẵn, giảm giới hạn RAM API còn 6 GiB.
+bật HTTPS và tạo ZIP Extension nằm trong [deploy/aws/README.md](deploy/aws/README.md).
+Bộ triển khai AWS là stack độc lập trong `deploy/aws/`, gồm Dockerfile,
+Compose, Caddy và công cụ đóng gói Extension; không phụ thuộc cấu hình Oracle.
+
+> Repository hiện không chứa bộ triển khai Oracle Cloud. Không sử dụng đường dẫn
+> `deploy/oracle/` trong các hướng dẫn cũ.
 
 ## 9. Xử lý lỗi thường gặp
 
