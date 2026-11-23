@@ -101,7 +101,7 @@ class AwsPackageTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (source / "services/api_config.js").write_text(
-                'export const API_URL = "http://127.0.0.1:8000";\\n',
+                'export const API_URL = "http://127.0.0.1:8000";',
                 encoding="utf-8",
             )
             for name in (".env", "secret.pem", "debug.log", "data.csv", "backup.zip"):
