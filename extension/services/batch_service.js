@@ -110,7 +110,7 @@ export async function analyzeReviewBatch(
   return {
     product_id: productId,
     model: "NB39+NB46+NB04",
-    source: "unified",
+    source,
     requested: total,
     submitted: processed,
     completed: results.filter(
