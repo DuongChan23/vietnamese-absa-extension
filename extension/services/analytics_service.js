@@ -77,7 +77,7 @@ export function buildAnalytics(batchResult, collectedReviews, shopeeRatings = nu
       totalApproximate: Boolean(shopeeRatings?.total_approximate)
     },
     categoryNormalization: {
-      policy: batchResult?.category_merge_policy ?? "frontend_alias_fallback",
+      policy: batchResult?.category_merge_policy ?? "frontend_source_preserving",
       usingMerged, usingRaw: validPredictions - usingMerged,
       fullyMerged: validPredictions > 0 && usingMerged === validPredictions
     }
