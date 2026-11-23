@@ -49,12 +49,14 @@ def normalize_api_url(value: str) -> str:
         raise ValueError("API URL must include a hostname.")
     try:
         hostname = hostname.rstrip(".").encode("idna").decode("ascii").lower()
+    except UnicodeError as exc:
+        raise ValueError("API URL hostname is invalid.") from exc
+    try:
         ipaddress.ip_address(hostname)
+    except ValueError:
+        pass  # DNS hostnames are expected; literal IP addresses are not.
+    else:
         raise ValueError("API URL must use a DNS hostname, not an IP address.")
-    except ValueError as exc:
-        # ip_address raises for DNS names; only that case is expected here.
-        if str(exc) == "API URL must use a DNS hostname, not an IP address.":
-            raise
     labels = hostname.split(".")
     if len(labels) < 2 or any(
         not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
