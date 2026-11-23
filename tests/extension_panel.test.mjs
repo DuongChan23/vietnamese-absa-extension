@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { ProductSession, productIdFromUrl } from '../extension/services/product_context.js';
 import { buildAnalytics } from '../extension/services/analytics_service.js';
 import { API_URL } from '../extension/services/api_config.js';
+import { buildAnalysisExport, createExportFilename } from '../extension/services/export_service.js';
 
 // Inject the real imported dependencies into a small DOM/Chrome harness.
 const source = (await fs.readFile(new URL('../extension/popup.js', import.meta.url), 'utf8'))
@@ -43,6 +44,7 @@ function panelFixture({ metadata, predictBatch, collectReviews } = {}) {
   };
   const messages = [];
   const batchRequests = [];
+  const exports = [];
   const chrome = {
     tabs, windows: { onFocusChanged: event() },
     runtime: {
@@ -59,7 +61,13 @@ function panelFixture({ metadata, predictBatch, collectReviews } = {}) {
     }
   };
   const context = vm.createContext({
-    ProductSession, productIdFromUrl, buildAnalytics, API_URL, logActivity: async () => true,
+    ProductSession, productIdFromUrl, buildAnalytics, API_URL,
+    buildAnalysisExport, createExportFilename,
+    downloadJsonFile: (payload, filename) => {
+      exports.push({ payload, filename });
+      return { filename, size_bytes: JSON.stringify(payload).length };
+    },
+    logActivity: async () => true,
     document: { querySelector: get, querySelectorAll: () => choices, createElement: element },
     chrome, URL, crypto, AbortController, AbortSignal, DOMException, performance, console,
     setInterval() {}, setTimeout: fn => queueMicrotask(fn),
@@ -82,7 +90,7 @@ function panelFixture({ metadata, predictBatch, collectReviews } = {}) {
   context.analyzeReviewBatch = vm.runInContext(`(() => { ${batchSource}; return analyzeReviewBatch; })()`, context);
   vm.runInContext(source, context);
   return {
-    context, get, tab, tabs, messages, batchRequests,
+    context, get, tab, tabs, messages, batchRequests, exports,
     evaluate: code => vm.runInContext(code, context),
     navigate(url) { tab.url = url; tabs.onUpdated.listeners[0](tab.id, { url }); },
     deliver(message) { chrome.runtime.onMessage.listeners.forEach(fn => fn(message)); },
@@ -254,6 +262,31 @@ test('all analysis batches finish for the collected product while navigation and
   assert.equal(panel.evaluate('collectedReviews.length'), 0);
   assert.equal(panel.get('#productSwitch').hidden, true);
   assert.equal(panel.get('#runAnalysis').disabled, false);
+});
+
+test('completed analysis can export a JSON file with raw reviews and their matched ABSA predictions', async () => {
+  const panel = panelFixture({ collectReviews: () => collectedProduct(2) });
+  await flush();
+  await panel.get('#runAnalysis').listeners.click();
+
+  assert.equal(panel.get('#dashboard').hidden, false);
+  assert.equal(panel.get('#exportJson').listeners.click instanceof Function, true);
+  panel.get('#exportJson').listeners.click();
+
+  assert.equal(panel.exports.length, 1);
+  const { payload, filename } = panel.exports[0];
+  assert.match(filename, /^shopee-absa-1_10-.*\.json$/);
+  assert.equal(payload.schema, 'vietnamese-absa-extension.analysis-export');
+  assert.equal(payload.domain.selected_source, 'vicloabsa');
+  assert.equal(payload.run.model, 'NB39+NB46+NB04');
+  assert.equal(payload.collection.stats.pages_checked, 4);
+  assert.equal(payload.reviews.length, 2);
+  assert.equal(payload.analysis.raw_predictions.length, 2);
+  assert.equal(payload.reviews[0].raw_review.review_id, 'review-0');
+  assert.equal(payload.reviews[0].prediction.review_id, 'review-0');
+  assert.equal(payload.reviews[1].prediction.review_id, 'review-1');
+  assert.equal(payload.reviews[0].analysis_status, 'ok');
+  assert.match(panel.get('#status').textContent, /Đã xuất dữ liệu JSON/);
 });
 
 test('explicitly switching during analysis aborts old work and prevents late results or further batches', async () => {

@@ -302,6 +302,10 @@ Với bản hiện tại, `/health` cần có `"api_version": "0.3.1"` và trư�
 `activity_log`. Nếu chưa có, tiến trình cổng 8000 vẫn đang chạy code cũ hoặc
 được khởi động từ thư mục khác.
 
+### Xuất dữ liệu phân tích JSON
+
+Sau khi phân tích xong, mở mục **Dữ liệu thực nghiệm** trong dashboard và nhấn **Xuất JSON**. File chứa metadata sản phẩm, source/taxonomy, dữ liệu bình luận gốc, dự đoán thô `aspects`/`aspects_merged`, kết quả ghép theo từng `review_id`, dữ liệu bị từ chối, thống kê và diagnostics thu thập. File được tạo cục bộ trong Extension. Xem [đặc tả JSON export](docs/analysis_json_export.md).
+
 ## 8. Tự kiểm tra trước buổi demo
 
 - [ ] Mở đúng thư mục project, nhìn thấy `backend/main.py` và `extension/manifest.json`.

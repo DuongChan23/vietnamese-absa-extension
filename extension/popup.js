@@ -6,6 +6,7 @@ import { logActivity } from "./services/activity_service.js";
 import { buildAnalytics } from "./services/analytics_service.js";
 import { analyzeReviewBatch } from "./services/batch_service.js";
 import { API_URL } from "./services/api_config.js";
+import { buildAnalysisExport, createExportFilename, downloadJsonFile } from "./services/export_service.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -54,6 +55,8 @@ let selectedRating = "all";
 let collectedReviews = [];
 let latestBatchResult = null;
 let latestAnalytics = null;
+let latestCollectionMetadata = null;
+let latestRunMetadata = null;
 let currentProductId = null;
 let currentRatingSummary = null;
 let isBusy = false;
@@ -107,6 +110,8 @@ function resetProductView(productId) {
   collectedReviews = [];
   latestBatchResult = null;
   latestAnalytics = null;
+  latestCollectionMetadata = null;
+  latestRunMetadata = null;
   currentProductId = productId;
   currentRatingSummary = null;
   loadedProductRevision = -1;
@@ -734,6 +739,19 @@ async function run() {
   const run = session.begin();
   run.started = performance.now();
   const limit = selectedLimit;
+  const analysisSource = selectedSource;
+  latestCollectionMetadata = null;
+  latestRunMetadata = {
+    run_id: run.runId,
+    product_id: run.productId,
+    started_at: new Date().toISOString(),
+    finished_at: null,
+    requested_review_limit: limit,
+    source: analysisSource,
+    model: "NB39+NB46+NB04",
+    status: "running",
+    domain_detection: domainDetection ? JSON.parse(JSON.stringify(domainDetection)) : null,
+  };
   setBusy(true);
   void logActivity("run_started", run, { limit });
 
@@ -793,6 +811,16 @@ async function run() {
     currentProductId =
       data.product_id || currentProductId;
     updateRatingSummary(data.rating_summary);
+    latestCollectionMetadata = {
+      platform: data.platform || "shopee",
+      product_id: data.product_id || run.productId,
+      run_id: data.run_id || run.runId,
+      url: data.url || null,
+      collected_at: data.collected_at || new Date().toISOString(),
+      stats: data.stats || null,
+      diagnostics: Array.isArray(data.diagnostics) ? data.diagnostics : [],
+      rating_summary: data.rating_summary ?? currentRatingSummary,
+    };
 
     const collectionInfo = $("#collectionInfo");
     collectionInfo.hidden = false;
@@ -804,7 +832,13 @@ async function run() {
       (STOP_LABELS[data.stats?.stop_reason] || data.stats?.stop_reason || "đã dừng");
 
     if (!collectedReviews.length) {
-      latestBatchResult = { results: [], submitted: 0, completed: 0 };
+      latestBatchResult = {
+        product_id: run.productId, model: "NB39+NB46+NB04", source: analysisSource,
+        results: [], rejected: [], requested: 0, submitted: 0, completed: 0, failed: 0,
+        stopped_early: false,
+      };
+      latestRunMetadata.finished_at = new Date().toISOString();
+      latestRunMetadata.status = "completed_no_reviews";
       latestAnalytics = buildAnalytics(latestBatchResult, [], currentRatingSummary);
       renderDashboard(latestAnalytics);
       setStatus("Chưa lấy được bình luận có nội dung để phân tích. Số sao hiển thị theo Shopee.");
@@ -842,10 +876,12 @@ async function run() {
           `Đã xử lý ${p.processed}/${p.total} bình luận`
         );
       },
-      { signal: run.signal, runId: run.runId, source: selectedSource }
+      { signal: run.signal, runId: run.runId, source: analysisSource }
     );
     await assertCurrentRun(run);
     latestBatchResult = batchResult;
+    latestRunMetadata.finished_at = new Date().toISOString();
+    latestRunMetadata.status = batchResult.stopped_early ? "partial" : batchResult.failed ? "completed_with_errors" : "completed";
     void logActivity("analysis_completed", run, {
       completed: batchResult.completed, failed: batchResult.failed,
       stopped_early: batchResult.stopped_early
@@ -887,6 +923,11 @@ async function run() {
 
   } catch (error) {
     if (!session.isCurrent(run)) return;
+    if (latestRunMetadata) {
+      latestRunMetadata.finished_at = new Date().toISOString();
+      latestRunMetadata.status = "failed";
+      latestRunMetadata.error = String(error?.message || error);
+    }
     void logActivity("run_failed", run, { error_type: error.name },
       performance.now() - run.started);
     setStatus(`Lỗi: ${ERROR_LABELS[error.message] || error.message}`, true);
@@ -895,6 +936,38 @@ async function run() {
     if (session.finish(run)) {
       setBusy(false);
     }
+  }
+}
+
+
+function exportLatestAnalysis() {
+  if (isBusy || !latestBatchResult) return;
+  try {
+    const source = latestBatchResult.source || latestRunMetadata?.source || selectedSource;
+    const payload = buildAnalysisExport({
+      exportedAt: new Date().toISOString(),
+      extensionVersion: "0.3.4",
+      product: currentProductMetadata,
+      selectedSource: source,
+      run: latestRunMetadata,
+      collection: latestCollectionMetadata,
+      reviews: collectedReviews,
+      batchResult: latestBatchResult,
+      analytics: latestAnalytics,
+    });
+    const filename = createExportFilename(
+      latestBatchResult.product_id || currentProductId || latestRunMetadata?.product_id
+    );
+    const download = downloadJsonFile(payload, filename);
+    setStatus("Đã xuất dữ liệu JSON: " + download.filename);
+    void logActivity("analysis_exported", session.context, {
+      filename: download.filename,
+      reviews: collectedReviews.length,
+      predictions: latestBatchResult.results?.length || 0,
+      source,
+    });
+  } catch (error) {
+    setStatus("Không thể xuất JSON: " + String(error?.message || error), true);
   }
 }
 
@@ -973,6 +1046,7 @@ document.querySelectorAll(".choice").forEach(
 );
 
 $("#runAnalysis").addEventListener("click", run);
+$("#exportJson").addEventListener("click", exportLatestAnalysis);
 $("#switchProduct").addEventListener("click", async () => {
   if (!session.canSwitchProduct) return;
   await syncActiveProduct({ switchProduct: true });
