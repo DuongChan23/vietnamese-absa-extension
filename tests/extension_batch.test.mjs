@@ -17,7 +17,7 @@ test('batch requests include run/product IDs and log progress without changing r
       return { ok: true };
     }
     requests.push(body);
-    return { ok: true, json: async () => ({ results: body.reviews.map(row => ({ ...row, status: 'ok', aspects: [] })) }) };
+    return { ok: true, json: async () => ({ source: body.source, results: body.reviews.map(row => ({ ...row, status: 'ok', aspects: [] })) }) };
   };
   try {
     const reviews = Array.from({ length: 21 }, (_, i) => ({ text: `review ${i}`, review_id: String(i), rating: 4 }));
@@ -51,7 +51,7 @@ test('aborting a product run prevents later batches', async () => {
   try {
     await assert.rejects(analyzeReviewBatch(
       Array.from({ length: 25 }, () => ({ text: 'tốt' })), '1.10',
-      () => controller.abort(), { signal: controller.signal, runId: 'run-old' }
+      () => controller.abort(), { signal: controller.signal, runId: 'run-old', source: 'vicloabsa' }
     ), { name: 'AbortError' });
     assert.equal(requests, 1);
   } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
@@ -63,9 +63,23 @@ test('malformed batch responses stop without accepting fabricated results', asyn
     ? { ok: true, json: async () => ({ results: [null] }) }
     : { ok: true, json: async () => ({ activity_log: { enabled: true } }) };
   try {
-    const result = await analyzeReviewBatch([{ text: 'tốt' }], '1.10');
+    const result = await analyzeReviewBatch([{ text: 'tốt' }], '1.10', () => {}, { source: 'vicloabsa' });
     assert.equal(result.stopped_early, true);
     assert.equal(result.completed, 0);
     assert.match(result.error, /không trả về danh sách/);
   } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
+});
+
+
+test('batch requires explicit source and rejects mismatched taxonomy response', async () => {
+  await assert.rejects(analyzeReviewBatch([{text:'tốt'}],'1.10'),/chọn lĩnh vực/);
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async url=>url.endsWith('/predict/batch')
+    ? {ok:true,json:async()=>({source:'visd4sa',results:[{text:'tốt',status:'ok'}]})}
+    : {ok:true,json:async()=>({activity_log:{enabled:true}})};
+  try {
+    const result=await analyzeReviewBatch([{text:'tốt'}],'1.10',()=>{},{source:'vicloabsa'});
+    assert.equal(result.stopped_early,true);
+    assert.match(result.error,/không khớp/);
+  } finally { await flushActivityLog(); globalThis.fetch=originalFetch; }
 });

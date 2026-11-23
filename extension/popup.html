@@ -45,8 +45,13 @@
       <div class="divider"></div>
 
       <label class="field-label" for="domainSource">Lĩnh vực sản phẩm</label>
-      <select id="domainSource" class="domain-select"><option value="vicloabsa" selected>Thời trang / Quần áo (ViCloABSA)</option><option value="visd4sa">Điện thoại / Điện tử (ViSD4SA)</option></select>
-      <p class="footnote">Chọn lĩnh vực để chỉ chạy taxonomy tương ứng; không chạy đồng thời hai bộ category.</p>
+      <p id="domainDetectionStatus" class="domain-detection" role="status" aria-live="polite">Đang chờ thông tin sản phẩm để nhận diện lĩnh vực...</p>
+      <select id="domainSource" class="domain-select" aria-describedby="domainDetectionStatus domainHelp">
+        <option value="">Chọn hoặc xác nhận lĩnh vực...</option>
+        <option value="vicloabsa">Thời trang / Quần áo (ViCloABSA)</option>
+        <option value="visd4sa">Điện thoại / Điện tử (ViSD4SA)</option>
+      </select>
+      <p id="domainHelp" class="footnote">Hệ thống chỉ tự chọn khi đủ căn cứ. Nếu chưa chắc chắn, hãy xác nhận lĩnh vực trước khi phân tích.</p>
 
       <label class="field-label" for="reviewLimit">
         Số bình luận có nội dung cần phân tích

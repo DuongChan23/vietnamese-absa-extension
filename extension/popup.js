@@ -29,7 +29,7 @@ const SENTIMENT_LABELS = {
 };
 
 const CATEGORY_LABELS = {
-  Service: "Dịch vụ",
+  Service: "Dịch vụ (Service)",
   General: "Chất lượng chung",
   Design: "Thiết kế",
   Material: "Chất liệu",
@@ -40,14 +40,16 @@ const CATEGORY_LABELS = {
   SCREEN: "Màn hình",
   STORAGE: "Bộ nhớ",
   FEATURES: "Tính năng",
-  "SER&ACC": "Dịch vụ"
+  "SER&ACC": "Dịch vụ & phụ kiện (SER&ACC)"
 };
 
 const categoryName = (value) =>
   CATEGORY_LABELS[value] || value || "Khác";
 
 let selectedLimit = 100;
-let selectedSource = 'vicloabsa';
+let selectedSource = null;
+let domainDetection = null;
+let currentProductMetadata = null;
 let selectedRating = "all";
 let collectedReviews = [];
 let latestBatchResult = null;
@@ -108,6 +110,12 @@ function resetProductView(productId) {
   currentProductId = productId;
   currentRatingSummary = null;
   loadedProductRevision = -1;
+  selectedSource = null;
+  domainDetection = null;
+  currentProductMetadata = null;
+  $("#domainSource").value = "";
+  $("#domainDetectionStatus").textContent = "Đang chờ thông tin sản phẩm để nhận diện lĩnh vực...";
+  $("#domainDetectionStatus").className = "domain-detection";
   selectedRating = "all";
   $("#dashboard").hidden = true;
   $("#collectionInfo").hidden = true;
@@ -126,6 +134,7 @@ function resetProductView(productId) {
 async function loadProduct(context, revision) {
   const ticket = ++productLoadTicket;
   productLoading = true;
+  updateProductControls();
   const isCurrent = () => ticket === productLoadTicket && session.revision === revision;
   try {
     // Shopee may update the URL before its product DOM has finished loading.
@@ -138,6 +147,7 @@ async function loadProduct(context, revision) {
         const product = data.product || data;
         if (product.product_id !== context.productId || !product.name) continue;
         showProduct(product);
+        await detectProductDomain(product, isCurrent);
         return;
       } catch (error) {
         if (!isCurrent()) return;
@@ -151,7 +161,7 @@ async function loadProduct(context, revision) {
       $("#productMeta").textContent = "Chờ trang tải xong rồi nhấn Phân tích.";
     }
   } finally {
-    if (isCurrent()) productLoading = false;
+    if (isCurrent()) { productLoading = false; updateProductControls(); }
   }
 }
 
@@ -233,7 +243,8 @@ function updateProductControls() {
   $("#productSwitch").hidden = !session.canSwitchProduct;
   $("#productLabel").textContent = session.pinned
     ? "SẢN PHẨM PHÂN TÍCH" : "SẢN PHẨM ĐANG XEM";
-  $("#runAnalysis").disabled = isBusy || !viewingAnalyzedProduct;
+  $("#runAnalysis").disabled = isBusy || productLoading || !viewingAnalyzedProduct || !selectedSource;
+  $("#domainSource").disabled = isBusy || productLoading;
 }
 
 function updateProgress(processed, total, label) {
@@ -303,6 +314,11 @@ async function collect(type, extra = {}, context = session.context) {
 function showProduct(p) {
   if (!p) return;
 
+  if (currentProductMetadata && currentProductMetadata.product_id !== p.product_id) {
+    selectedSource = null; domainDetection = null; $("#domainSource").value = "";
+  }
+  currentProductMetadata = p;
+
   $("#productName").textContent =
     p.name || "Sản phẩm Shopee";
 
@@ -310,14 +326,12 @@ function showProduct(p) {
     p.price_text ||
     (p.price != null ? String(p.price) : "");
 
-  $("#productMeta").textContent = [
-    p.rating != null ? `★ ${p.rating}` : null,
-    p.review_count != null
-      ? `${p.review_count} đánh giá trên trang`
-      : null
-  ].filter(Boolean).join(" · ") ||
-    "Đang phân tích bình luận người mua";
-
+  const productMetaParts = [
+    p.rating != null ? "★ " + p.rating : null,
+    p.review_count != null ? p.review_count + " đánh giá trên trang" : null,
+    Array.isArray(p.category_path) && p.category_path.length ? "Danh mục: " + p.category_path.join(" › ") : null
+  ].filter(Boolean);
+  $("#productMeta").textContent = productMetaParts.join(" · ") || "Đang phân tích bình luận người mua";
   currentProductId =
     p.product_id ||
     (
@@ -331,6 +345,67 @@ function showProduct(p) {
     average: p.rating_summary?.average ?? p.rating ?? null,
     total: p.rating_summary?.total ?? p.review_count ?? null
   });
+}
+
+function domainLabel(source) {
+  return source === "vicloabsa" ? "Thời trang / Quần áo (ViCloABSA)" : "Điện thoại / Điện tử (ViSD4SA)";
+}
+function renderDomainDetection(result) {
+  domainDetection = result;
+  const status = $("#domainDetectionStatus");
+  const confidence = Math.round((Number(result.confidence) || 0) * 100);
+  const suggested = result.source || result.suggested_source;
+  if (result.status === "auto_detected" && result.source) {
+    selectedSource = result.source;
+    $("#domainSource").value = result.source;
+    status.className = "domain-detection positive";
+    status.textContent = "Đã tự nhận diện: " + domainLabel(result.source) + " · " + confidence + "%.";
+  } else if (result.status === "confirmation_required" && suggested) {
+    selectedSource = null; $("#domainSource").value = "";
+    status.className = "domain-detection warning";
+    status.textContent = "Đề xuất: " + domainLabel(suggested) + " · " + confidence + "%. Hãy xác nhận bên dưới.";
+  } else {
+    selectedSource = null; $("#domainSource").value = "";
+    status.className = "domain-detection error";
+    status.textContent = result.reason || "Chưa đủ căn cứ. Hãy chọn lĩnh vực thủ công.";
+  }
+  updateProductControls();
+}
+async function detectProductDomain(product, isCurrent = () => true) {
+  if (!product || !product.product_id) return null;
+  selectedSource = null; $("#domainSource").value = "";
+  $("#domainDetectionStatus").className = "domain-detection";
+  $("#domainDetectionStatus").textContent = "Đang nhận diện lĩnh vực sản phẩm...";
+  updateProductControls();
+  try {
+    const response = await fetch(API_URL + "/domain/detect", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_id: product.product_id, name: product.name || "",
+        description: product.description || "", category: product.category || null,
+        category_path: Array.isArray(product.category_path) ? product.category_path : [],
+        category_ids: Array.isArray(product.category_ids) ? product.category_ids : []
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error("domain_detection_http_" + response.status);
+    const result = await response.json();
+    if (!isCurrent()) return null;
+    renderDomainDetection(result);
+    void logActivity("domain_detection_completed", session.context, {
+      source: result.source || result.suggested_source || null,
+      confidence: Number(result.confidence) || 0, method: result.method || "unknown", status: result.status || "unknown"
+    });
+    return result;
+  } catch (error) {
+    if (!isCurrent()) return null;
+    selectedSource = null; domainDetection = null; $("#domainSource").value = "";
+    $("#domainDetectionStatus").className = "domain-detection warning";
+    $("#domainDetectionStatus").textContent = "Không dùng được nhận diện tự động. Hãy chọn lĩnh vực thủ công.";
+    updateProductControls();
+    void logActivity("domain_detection_unavailable", session.context, {error:String(error?.message||error).slice(0,120)});
+    return null;
+  }
 }
 
 function updateRatingSummary(summary) {
@@ -652,6 +727,10 @@ async function run() {
     setStatus("Hãy mở một trang sản phẩm Shopee trước.", true);
     return;
   }
+  if (!selectedSource) {
+    setStatus("Hãy xác nhận hoặc chọn lĩnh vực sản phẩm trước khi phân tích.", true);
+    return;
+  }
   const run = session.begin();
   run.started = performance.now();
   const limit = selectedLimit;
@@ -677,9 +756,9 @@ async function run() {
         "COLLECT_SHOPEE_PRODUCT", {}, run
       );
       await assertCurrentRun(run);
-      showProduct(
-        productData.product || productData
-      );
+      const product = productData.product || productData;
+      showProduct(product);
+      if (!selectedSource) await detectProductDomain(product, () => session.isCurrent(run));
     } catch (error) {
       if (!session.isCurrent(run)) throw error;
       if (error.message === "product_page_loading" || error.message === "product_changed") throw error;
@@ -856,7 +935,19 @@ async function checkBackend() {
   }
 }
 
-$("#domainSource").addEventListener("change", event => { if (!isBusy) selectedSource = event.target.value; });
+$("#domainSource").addEventListener("change", event => {
+  if (isBusy) return;
+  selectedSource = ["vicloabsa", "visd4sa"].includes(event.target.value) ? event.target.value : null;
+  if (selectedSource) {
+    const suggested = domainDetection?.suggested_source || domainDetection?.source;
+    $("#domainDetectionStatus").className = "domain-detection positive";
+    $("#domainDetectionStatus").textContent = (suggested === selectedSource ? "Đã xác nhận đề xuất: " : "Đã chọn thủ công: ") + domainLabel(selectedSource) + ".";
+  } else {
+    $("#domainDetectionStatus").className = "domain-detection warning";
+    $("#domainDetectionStatus").textContent = "Hãy chọn một lĩnh vực để tiếp tục.";
+  }
+  updateProductControls();
+});
 
 // Chọn giới hạn bình luận
 document.querySelectorAll(".choice").forEach(

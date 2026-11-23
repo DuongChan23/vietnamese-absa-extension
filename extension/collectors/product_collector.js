@@ -90,6 +90,79 @@
     return {};
   }
 
+  function structuredBreadcrumbs() {
+    const queue = [];
+    for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+      try { queue.push(JSON.parse(script.textContent)); } catch { /* Ignore invalid JSON-LD. */ }
+    }
+    while (queue.length) {
+      const node = queue.shift();
+      if (Array.isArray(node)) { queue.push(...node); continue; }
+      if (!node || typeof node !== "object") continue;
+      const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+      if (types.some(type => String(type).toLowerCase() === "breadcrumblist")) {
+        const names = [], urls = [];
+        for (const entry of Array.isArray(node.itemListElement) ? node.itemListElement : []) {
+          const item = entry?.item;
+          const name = clean((item && typeof item === "object" ? item.name : null) || entry?.name);
+          const itemUrl = typeof item === "string" ? item : item && typeof item === "object" ? (item["@id"] || item.url) : null;
+          if (name && names[names.length - 1] !== name) names.push(name);
+          if (typeof itemUrl === "string") urls.push(itemUrl);
+        }
+        if (names.length) return { names, urls, source: "jsonld_breadcrumb" };
+      }
+      if (node["@graph"]) queue.push(node["@graph"]);
+      if (node.mainEntity) queue.push(node.mainEntity);
+    }
+    return null;
+  }
+
+  function domBreadcrumbs() {
+    const selectors = ['nav[aria-label*="breadcrumb" i]', '[data-testid*="breadcrumb" i]', '[class*="breadcrumb" i]', 'ol[aria-label*="breadcrumb" i]'];
+    for (const selector of selectors) for (const container of document.querySelectorAll(selector)) {
+      if (!visible(container) || typeof container.querySelectorAll !== "function") continue;
+      let nodes = [...container.querySelectorAll("a")];
+      if (!nodes.length) nodes = [...container.querySelectorAll("li, span")];
+      const names = [], urls = [];
+      for (const node of nodes) {
+        if (!visible(node)) continue;
+        const name = clean(node.textContent);
+        if (!name || name.length > 100 || names[names.length - 1] === name) continue;
+        names.push(name);
+        if (typeof node.href === "string" && node.href) urls.push(node.href);
+      }
+      if (names.length) return { names, urls, source: "dom_breadcrumb" };
+    }
+    return null;
+  }
+
+  function getCategoryData(schema, baseUrl) {
+    const structured = structuredBreadcrumbs();
+    const dom = structured ? null : domBreadcrumbs();
+    const values = Array.isArray(schema.category) ? schema.category : [schema.category];
+    const schemaNames = values.flatMap(value => typeof value === "string" ? value.split(/[>/|›]+/) : []).map(clean).filter(Boolean);
+    const selected = structured || dom || (schemaNames.length
+      ? { names: schemaNames, urls: [], source: "product_schema_category" }
+      : { names: [], urls: [], source: null });
+    const ids = new Set();
+    for (const href of selected.urls || []) {
+      try {
+        const parsed = new URL(href, baseUrl);
+        for (const key of ["categoryid", "category_id", "catid", "cat_id"]) {
+          const value = parsed.searchParams.get(key);
+          if (value && /^\d+$/.test(value)) ids.add(value);
+        }
+      } catch { /* Ignore malformed links. */ }
+    }
+    return {
+      category_path: selected.names,
+      category_name: selected.names.length ? selected.names[selected.names.length - 1] : null,
+      category_ids: [...ids],
+      category_source: selected.source,
+      category: schemaNames.length ? schemaNames.join(" > ") : null
+    };
+  }
+
   // =====================================================
   // 3. PRODUCT ID FROM URL
   // =====================================================
@@ -131,6 +204,7 @@
   }
 
   const schema = getProductSchema();
+  const categoryData = getCategoryData(schema, url);
   // Shopee SPA navigation can leave the previous product's JSON-LD briefly.
   const identityUrls = [schema.url, schema["@id"], meta(["og:url"]),
     document.querySelector('link[rel="canonical"]')?.href];
@@ -453,12 +527,15 @@
 
     description,
 
+    ...categoryData,
+
     collected_at: new Date().toISOString(),
 
     availability: {
       name: Boolean(name),
       price: Boolean(priceResult),
       description: Boolean(description),
+      category: Boolean(categoryData.category_path.length),
       rating: rating !== null,
       review_count: Boolean(reviewCountResult),
     },
