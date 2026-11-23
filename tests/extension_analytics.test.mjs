@@ -11,9 +11,9 @@ test('merged results take priority and raw-only aliases match backend labels', (
   assert.equal(result.totalAspects, 1);
   assert.equal(result.analyzed, 2);
   assert.equal(result.reviewsWithAspects, 1);
-  assert.equal(result.categories[0].name, 'Service');
+  assert.equal(result.categories[0].name, 'SER&ACC');
   assert.deepEqual(result.categoryNormalization, {
-    policy: 'frontend_alias_fallback', usingMerged: 1, usingRaw: 1, fullyMerged: false
+    policy: 'frontend_source_preserving', usingMerged: 1, usingRaw: 1, fullyMerged: false
   });
 });
 

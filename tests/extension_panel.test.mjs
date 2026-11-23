@@ -64,11 +64,15 @@ function panelFixture({ metadata, predictBatch, collectReviews } = {}) {
     chrome, URL, crypto, AbortController, AbortSignal, DOMException, performance, console,
     setInterval() {}, setTimeout: fn => queueMicrotask(fn),
     fetch: async (url, options) => {
+      if (url.endsWith('/domain/detect')) return {ok:true,json:async()=>({
+        source:'vicloabsa',suggested_source:'vicloabsa',confidence:0.98,
+        method:'shopee_category',status:'auto_detected',requires_confirmation:false,evidence:['Áo thun']
+      })};
       if (url.endsWith('/predict/batch')) {
         const payload = JSON.parse(options.body);
         batchRequests.push({ payload, signal: options.signal });
         if (predictBatch) return predictBatch(payload, options.signal);
-        return { ok: true, json: async () => ({ results: payload.reviews.map(row => ({
+        return { ok: true, json: async () => ({ source: payload.source, results: payload.reviews.map(row => ({
           ...row, status: 'ok', aspects: [], aspects_merged: [],
         })) }) };
       }
@@ -173,7 +177,7 @@ function collectedProduct(count = 21) {
 }
 
 function modelResponse(payload) {
-  return { ok: true, json: async () => ({ results: payload.reviews.map(row => ({
+  return { ok: true, json: async () => ({ source: payload.source, results: payload.reviews.map(row => ({
     ...row, status: 'ok', aspects_merged: [{
       start: 0, end: 4, aspect: row.text.slice(0, 4), category: 'General', sentiment: 'positive',
     }],
@@ -217,6 +221,7 @@ test('all analysis batches finish for the collected product while navigation and
   assert.deepEqual(panel.batchRequests.map(request => request.payload.reviews.length), [10, 10, 1]);
   assert.ok(panel.batchRequests.every(request => request.payload.product_id === '1.10' &&
     request.payload.run_id === run.runId && !request.signal.aborted));
+  assert.ok(panel.batchRequests.every(request => request.payload.source === 'vicloabsa'));
   assert.equal(panel.get('#dashboard').hidden, false);
   assert.equal(panel.evaluate('latestBatchResult.completed'), 21);
   assert.equal(panel.evaluate('currentProductId'), '1.10');

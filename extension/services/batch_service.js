@@ -13,7 +13,7 @@ export async function analyzeReviewBatch(
   reviews,
   productId,
   onProgress = () => {},
-  { signal, runId, source = "vicloabsa" } = {}
+  { signal, runId, source } = {}
 ) {
   if (!["vicloabsa", "visd4sa"].includes(source)) throw new Error("Hãy chọn lĩnh vực ViCloABSA hoặc ViSD4SA.");
   if (!Array.isArray(reviews) || reviews.length === 0) {
@@ -72,6 +72,7 @@ export async function analyzeReviewBatch(
       ) || (data.rejected !== undefined && !Array.isArray(data.rejected))) {
         throw new Error("API không trả về danh sách kết quả hợp lệ.");
       }
+      if (data.source !== source) throw new Error("Taxonomy Backend trả về không khớp với lĩnh vực đã chọn.");
 
       results.push(...data.results);
 

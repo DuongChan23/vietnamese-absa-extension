@@ -40,3 +40,27 @@ test('metadata left over from the previous SPA product is rejected', () => {
   assert.equal(collectProduct({ schemaUrl: 'https://shopee.vn/old-i.1.10' }).error, 'product_page_loading');
   assert.equal(collectProduct({ canonicalUrl: 'https://shopee.vn/old-i.1.10' }).error, 'product_page_loading');
 });
+
+
+test('product collector extracts JSON-LD breadcrumb names and category IDs', () => {
+  const product = {'@type':'Product',url:'https://shopee.vn/a-i.1.20',name:'Áo thun Coolmate',offers:{price:139000}};
+  const breadcrumb = {'@type':'BreadcrumbList',itemListElement:[
+    {'@type':'ListItem',position:1,name:'Thời Trang Nam',item:'https://shopee.vn/category?categoryid=1001'},
+    {'@type':'ListItem',position:2,name:'Áo',item:'https://shopee.vn/category?categoryid=1002'},
+    {'@type':'ListItem',position:3,name:'Áo Thun',item:'https://shopee.vn/category?categoryid=1003'}
+  ]};
+  const scripts=[product,breadcrumb].map(value=>({textContent:JSON.stringify(value)}));
+  const heading={textContent:'Áo thun Coolmate',getBoundingClientRect:()=>({width:500,height:30})};
+  const result=vm.runInNewContext(source,{
+    URL,window:{location:{href:'https://shopee.vn/a-i.1.20'}},
+    getComputedStyle:()=>({display:'block',visibility:'visible'}),
+    document:{
+      title:'Current title',
+      querySelector:selector=>selector.includes('canonical')?{href:'https://shopee.vn/a-i.1.20'}:heading,
+      querySelectorAll:selector=>selector.includes('ld+json')?scripts:selector==='h1'?[heading]:[]
+    }
+  });
+  assert.deepEqual(Array.from(result.category_path),['Thời Trang Nam','Áo','Áo Thun']);
+  assert.deepEqual(Array.from(result.category_ids),['1001','1002','1003']);
+  assert.equal(result.category_source,'jsonld_breadcrumb');
+});

@@ -1,0 +1,37 @@
+{
+  "note": "Regression examples transcribed from publicly indexed Shopee product/listing text on 2026-11-23. These are classifier inputs, not raw DOM captures; live Chrome extraction must still be verified separately.",
+  "products": [
+    {
+      "id": "coolmate-tshirt",
+      "url": "https://shopee.vn/%C3%81o-thun-unisex-Coolmate-th%E1%BA%A5m-h%C3%BAt-nhanh-co-gi%C3%A3n-tho%C3%A1ng-kh%C3%AD-i.24710134.24169579811",
+      "name": "Áo thun unisex Coolmate thấm hút nhanh, co giãn thoáng khí",
+      "category_path": [
+        "Thể Thao & Du Lịch",
+        "Thời Trang Thể Thao & Dã Ngoại",
+        "Áo Thể Thao"
+      ],
+      "expected_source": "vicloabsa"
+    },
+    {
+      "id": "iphone-17",
+      "url": "https://shopee.vn/product/88201679/26841370473",
+      "name": "Điện thoại Apple iPhone 17 256GB",
+      "category_path": [
+        "Điện Thoại & Phụ Kiện",
+        "Điện thoại",
+        "Apple"
+      ],
+      "expected_source": "visd4sa"
+    },
+    {
+      "id": "samsung-galaxy-a17",
+      "url": "https://shopee.vn/%C4%90i%E1%BB%87n-tho%E1%BA%A1i-Samsung-Galaxy-A17-5G-8-128GB-B%E1%BA%A3o-h%C3%A0nh-ch%C3%ADnh-h%C3%A3ng-12-th%C3%A1ng-i.1143957637.26390835755",
+      "name": "Điện thoại Samsung Galaxy A17 5G 8/128GB - Bảo hành chính hãng 12 tháng",
+      "category_path": [
+        "Điện thoại Galaxy",
+        "Điện thoại"
+      ],
+      "expected_source": "visd4sa"
+    }
+  ]
+}

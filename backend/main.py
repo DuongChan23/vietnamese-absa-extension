@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from .activity_log import activity_context, log_event
 from .api_guard import APIGuard, extension_origin_pattern
 from .category_normalizer import MERGE_POLICY, merge_aspects
+from .domain_classifier import detect_product_domain, local_domain_model_configured
 from .inference_reuse import ExactPredictionCache
 from .inference_runtime import InputTooLongError
 from .preprocessing import prepare_reviews
@@ -65,7 +66,7 @@ DetailValue = Annotated[str, Field(max_length=200)] | int | Annotated[
 class AnalysisRequest(BaseModel):
     run_id: Identifier | None = None
     product_id: Identifier | None = None
-    source: str = Field(default="unified", min_length=1, max_length=100)
+    source: str = Field(..., min_length=1, max_length=100)
 
 
 class PredictRequest(AnalysisRequest):
@@ -74,6 +75,15 @@ class PredictRequest(AnalysisRequest):
 
 class BatchPredictRequest(AnalysisRequest):
     reviews: list[dict[str, Any] | str] = Field(min_length=1, max_length=30)
+
+
+class DomainDetectionRequest(BaseModel):
+    product_id: Identifier | None = None
+    name: Annotated[str, Field(max_length=500)] = ""
+    description: Annotated[str, Field(max_length=5000)] | None = None
+    category: Annotated[str, Field(max_length=500)] | None = None
+    category_path: list[Annotated[str, Field(max_length=200)]] = Field(default_factory=list, max_length=20)
+    category_ids: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=20)
 
 
 class ActivityLogRequest(BaseModel):
@@ -133,7 +143,16 @@ def health():
         'unified_available': predictor is not None,
         'category_merge_available': True,
         'category_merge_policy': MERGE_POLICY,
+        'domain_detection': {
+            'endpoint': '/domain/detect',
+            'local_model_configured': local_domain_model_configured(),
+        },
     }
+
+
+@app.post('/domain/detect')
+def detect_domain(req: DomainDetectionRequest):
+    return detect_product_domain(req.model_dump())
 
 
 @app.post('/activity/log')
