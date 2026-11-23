@@ -20,7 +20,7 @@
 
 ## Kiểm chứng
 
-Kết quả **65 kiểm thử Python và 53 kiểm thử Extension** là số liệu workspace được ghi nhận trước đợt sửa lỗi test/deployment hiện tại; không dùng nó làm xác nhận cho revision mới. CI của PR sửa lỗi sẽ chạy lại toàn bộ Python và Extension tests, kiểm tra Docker Compose AWS độc lập và cú pháp Bash. Hash ba checkpoint NB20/NB39/NB46 vẫn phải được đối chiếu riêng trên máy có đủ model; kiểm thử unit không nạp checkpoint thật.
+Kết quả **65 kiểm thử Python và 53 kiểm thử Extension** là số liệu workspace được ghi nhận trước đợt sửa lỗi test/deployment hiện tại; không dùng nó làm xác nhận cho revision mới. Workflow của PR #6 đã được kích hoạt và chạy lại, nhưng các job đều kết thúc trước khi GitHub cung cấp step summary hoặc log; vì vậy CI hiện **không kết luận được** test có chạy hay không. Hash ba checkpoint NB20/NB39/NB46 vẫn phải được đối chiếu riêng trên máy có đủ model; kiểm thử unit không nạp checkpoint thật.
 
 Chạy từ gốc dự án, trong môi trường Python riêng nếu `.venv` cũ bị lỗi:
 
