@@ -22,9 +22,10 @@ LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 def normalize_api_url(value: str) -> str:
     """Accept only a public HTTPS origin; API paths and credentials are forbidden."""
-    raw = str(value or "").strip()
-    if not raw or any(ord(char) < 32 for char in raw):
+    raw = str(value or "")
+    if not raw or any(ord(char) < 32 or ord(char) == 127 for char in raw):
         raise ValueError("API URL must be a public HTTPS origin.")
+    raw = raw.strip()
     try:
         parsed = urlsplit(raw)
         port = parsed.port
