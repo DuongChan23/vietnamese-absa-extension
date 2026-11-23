@@ -1,9 +1,6 @@
 "use strict";
 
 const SENTIMENTS = ["positive", "neutral", "negative"];
-const CATEGORY_ALIASES = {
-  GENERAL: "General", DESIGN: "Design", PRICE: "Price", "SER&ACC": "Service"
-};
 const emptyCounts = () => ({ positive: 0, neutral: 0, negative: 0 });
 const percent = (value, total) => total > 0 ? Math.round(value / total * 1000) / 10 : 0;
 const nonNegativeInteger = value => value !== null && value !== undefined && value !== "" &&
@@ -34,7 +31,7 @@ export function buildAnalytics(batchResult, collectedReviews, shopeeRatings = nu
       const sentiment = String(aspect.sentiment ?? "").trim().toLowerCase();
       if (!SENTIMENTS.includes(sentiment)) continue;
       const label = String(aspect.category ?? "UNKNOWN").trim();
-      const category = Object.hasOwn(CATEGORY_ALIASES, label) ? CATEGORY_ALIASES[label] : label || "UNKNOWN";
+      const category = label || "UNKNOWN";
       hasValidAspect = true;
       sentiments[sentiment]++;
       if (!categories.has(category)) categories.set(category, { name: category, ...emptyCounts() });
