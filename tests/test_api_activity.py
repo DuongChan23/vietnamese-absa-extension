@@ -36,7 +36,7 @@ def load_handlers():
         'backend.inference': SimpleNamespace(ABSAPredictor=object),
         'fastapi': SimpleNamespace(FastAPI=FakeApp, HTTPException=FakeHTTPException),
         'fastapi.middleware.cors': SimpleNamespace(CORSMiddleware=object),
-        'pydantic': SimpleNamespace(BaseModel=object, Field=lambda **values: values.get('default')),
+        'pydantic': SimpleNamespace(BaseModel=object, Field=lambda *args, **values: values.get('default', args[0] if args else None)),
     }):
         spec.loader.exec_module(module)
     module.log_event = Mock(return_value=True)
