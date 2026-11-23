@@ -46,7 +46,7 @@ test('aborting a product run prevents later batches', async () => {
     };
     requests++;
     const body = JSON.parse(options.body);
-    return { ok: true, json: async () => ({ results: body.reviews.map(row => ({ ...row, status: 'ok' })) }) };
+    return { ok: true, json: async () => ({ source: body.source, results: body.reviews.map(row => ({ ...row, status: 'ok' })) }) };
   };
   try {
     await assert.rejects(analyzeReviewBatch(
