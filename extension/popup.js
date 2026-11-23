@@ -47,6 +47,7 @@ const categoryName = (value) =>
   CATEGORY_LABELS[value] || value || "Khác";
 
 let selectedLimit = 100;
+let selectedSource = 'vicloabsa';
 let selectedRating = "all";
 let collectedReviews = [];
 let latestBatchResult = null;
@@ -219,6 +220,7 @@ function setBusy(busy) {
   document.querySelectorAll(".choice").forEach(button => {
     button.disabled = busy;
   });
+  $("#domainSource").disabled = busy;
 
   $("#runAnalysis").textContent = busy
     ? "Đang xử lý, vui lòng chờ..."
@@ -761,7 +763,7 @@ async function run() {
           `Đã xử lý ${p.processed}/${p.total} bình luận`
         );
       },
-      { signal: run.signal, runId: run.runId }
+      { signal: run.signal, runId: run.runId, source: selectedSource }
     );
     await assertCurrentRun(run);
     latestBatchResult = batchResult;
@@ -853,6 +855,8 @@ async function checkBackend() {
     );
   }
 }
+
+$("#domainSource").addEventListener("change", event => { if (!isBusy) selectedSource = event.target.value; });
 
 // Chọn giới hạn bình luận
 document.querySelectorAll(".choice").forEach(
