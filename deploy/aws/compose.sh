@@ -4,7 +4,7 @@ set -euo pipefail
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 compose_args=(
   --project-name absa-aws
-  -f "$project_root/deploy/oracle/compose.yaml"
+  -f "$project_root/deploy/aws/compose.yaml"
   -f "$project_root/deploy/aws/compose.override.yaml"
 )
 
