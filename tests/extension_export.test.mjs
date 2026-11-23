@@ -21,7 +21,7 @@ test("export preserves source taxonomy, original reviews, raw predictions, and r
     extensionVersion: "0.3.4",
     product: { product_id: "shop.item", name: "Áo Coolmate", category_path: ["Thời Trang", "Áo"] },
     selectedSource: "vicloabsa",
-    run: { run_id: "run-1", product_id: "shop.item", started_at: "2026-11-23T11:00:00.000Z", source: "vicloabsa" },
+    run: { run_id: "run-1", product_id: "shop.item", started_at: "2026-11-23T11:00:00.000Z", source: "vicloabsa", domain_detection: { source: "vicloabsa", confidence: 0.98, method: "shopee_category" } },
     collection: { platform: "shopee", product_id: "shop.item", stats: { pages_checked: 2 } },
     reviews,
     batchResult: {
@@ -37,6 +37,7 @@ test("export preserves source taxonomy, original reviews, raw predictions, and r
   assert.equal(payload.schema, "vietnamese-absa-extension.analysis-export");
   assert.equal(payload.schema_version, "1.0.0");
   assert.equal(payload.domain.selected_source, "vicloabsa");
+  assert.equal(payload.domain.detection.confidence, 0.98);
   assert.equal(payload.analysis.category_merge_policy, "source_preserving_exact_duplicate_v1");
   assert.equal(payload.reviews.length, 3);
   assert.equal(payload.reviews[0].prediction.aspects_merged[0].category, "Service");
