@@ -8,7 +8,7 @@ Chuẩn bị phát hành công khai: xem [báo cáo rà soát và các bước c
 
 ### Chọn miền suy luận (Hướng B)
 
-Side Panel yêu cầu chọn miền trước khi phân tích: `vicloabsa` cho thời trang/quần áo (taxonomy ViCloABSA), `visd4sa` cho điện thoại/điện tử (taxonomy ViSD4SA). Hai miền dùng chung checkpoint NB39 → NB46 → NB04 nhưng chỉ truy vấn taxonomy được chọn. Extension không tự suy đoán domain. `unified` chỉ là chế độ thử nghiệm, không dùng để đối chiếu trực tiếp với NB55.
+Extension tự nhận diện lĩnh vực từ breadcrumb/danh mục Shopee trước, sau đó dùng luật từ khóa trên tên và mô tả khi thiếu metadata. `vicloabsa` tương ứng thời trang/quần áo (taxonomy ViCloABSA), `visd4sa` tương ứng điện thoại/điện tử (taxonomy ViSD4SA). Chỉ tự chọn khi điểm tin cậy đạt ngưỡng; trường hợp mơ hồ yêu cầu người dùng xác nhận hoặc chọn thủ công. Hai miền dùng chung checkpoint NB39 → NB46 → NB04 nhưng chỉ truy vấn taxonomy được chọn. Backend yêu cầu `source` tường minh; `unified` chỉ còn là chế độ thử nghiệm API được gọi tường minh, không dùng trong Extension và không dùng để đối chiếu trực tiếp với NB55. Xem [hướng dẫn Auto Domain Detection](docs/auto_domain_detection.md).
 
 Hệ thống phân tích bình luận tiếng Việt theo **khía cạnh** (Aspect-Based Sentiment Analysis — ABSA):
 

@@ -14,7 +14,7 @@ from backend.inference_runtime import InputTooLongError
 class HTTPTests(unittest.TestCase):
     def setUp(self):
         self.model = SimpleNamespace(
-            categories={'clothes': [], 'phones': []},
+            categories={'vicloabsa': [], 'visd4sa': []},
             predict_unified=Mock(return_value=[]), predict=Mock(return_value=[]),
             runtime_info=lambda: {'device': 'cpu', 'java_home': '/private/java'},
         )
@@ -29,26 +29,26 @@ class HTTPTests(unittest.TestCase):
 
     def test_single_and_batch_preserve_predictions_and_agree_on_policy(self):
         raw = [{'start': 0, 'end': 3, 'aspect': 'Pin', 'category': 'BATTERY', 'sentiment': 'positive'}]
-        self.model.predict_unified.return_value = raw
-        response = self.client.post('/predict', json={'text': 'Pin tốt'})
+        self.model.predict.return_value = raw
+        response = self.client.post('/predict', json={'text': 'Pin tốt', 'source': 'visd4sa'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['aspects'], raw)
         self.assertEqual(response.json()['category_merge_policy'], MERGE_POLICY)
-        batch = self.client.post('/predict/batch', json={'reviews': [
+        batch = self.client.post('/predict/batch', json={'source': 'visd4sa', 'reviews': [
             {'review_id': '1', 'text': 'Pin tốt', 'rating': 5},
             {'review_id': '2', 'text': 'Pin tốt', 'rating': 3},
         ]})
         self.assertEqual(batch.status_code, 200)
         self.assertEqual([row['rating'] for row in batch.json()['results']], [5, 3])
-        self.assertEqual(self.model.predict_unified.call_count, 2)
+        self.assertEqual(self.model.predict.call_count, 2)
 
     def test_empty_null_and_oversized_text_are_rejected_before_model(self):
         for text in ('', ' \n\t ', 'ok\x00', 'x' * 3001):
             with self.subTest(text=text[:10]):
-                self.assertEqual(self.client.post('/predict', json={'text': text}).status_code, 422)
-        self.model.predict_unified.assert_not_called()
-        self.assertEqual(self.client.post('/predict', json={'text': '  Pin\ntốt  '}).status_code, 200)
-        self.model.predict_unified.assert_called_once_with('  Pin\ntốt  ')
+                self.assertEqual(self.client.post('/predict', json={'text': text, 'source': 'vicloabsa'}).status_code, 422)
+        self.model.predict.assert_not_called()
+        self.assertEqual(self.client.post('/predict', json={'text': '  Pin\ntốt  ', 'source': 'visd4sa'}).status_code, 200)
+        self.model.predict.assert_called_once_with('  Pin\ntốt  ', 'visd4sa')
 
     def test_unknown_source_and_large_batch_are_rejected(self):
         self.assertEqual(self.client.post('/predict', json={'text': 'tốt', 'source': 'wrong'}).status_code, 422)
@@ -56,16 +56,34 @@ class HTTPTests(unittest.TestCase):
         self.model.predict_unified.assert_not_called()
 
     def test_errors_do_not_expose_private_paths(self):
-        self.model.predict_unified.side_effect = RuntimeError('/private/checkpoint.pt')
+        self.model.predict.side_effect = RuntimeError('/private/checkpoint.pt')
         with patch.object(api.logger, 'exception'):
-            result = self.client.post('/predict', json={'text': 'tốt'})
-            batch = self.client.post('/predict/batch', json={'reviews': ['tốt']})
+            result = self.client.post('/predict', json={'text': 'tốt', 'source': 'vicloabsa'})
+            batch = self.client.post('/predict/batch', json={'source': 'vicloabsa', 'reviews': ['tốt']})
         self.assertEqual(result.status_code, 500)
         self.assertEqual(result.json()['detail'], 'inference_failed')
         self.assertEqual(batch.json()['results'][0]['error'], 'inference_failed')
         self.assertNotIn('/private', self.client.get('/health').text)
         with patch.object(api, 'predictor', None):
-            self.assertEqual(self.client.post('/predict', json={'text': 'tốt'}).status_code, 503)
+            self.assertEqual(self.client.post('/predict', json={'text': 'tốt', 'source': 'vicloabsa'}).status_code, 503)
+
+
+    def test_source_is_required_and_unified_is_only_explicit_experimental_mode(self):
+        self.assertEqual(self.client.post('/predict', json={'text': 'Pin tốt'}).status_code, 422)
+        self.model.predict_unified.return_value = []
+        response = self.client.post('/predict', json={'text': 'Pin tốt', 'source': 'unified'})
+        self.assertEqual(response.status_code, 200)
+        self.model.predict_unified.assert_called_once_with('Pin tốt')
+
+    def test_domain_detection_endpoint_returns_auditable_decision(self):
+        response = self.client.post('/domain/detect', json={
+            'name': 'Áo thun Coolmate Excool',
+            'category_path': ['Thời Trang Nam', 'Áo', 'Áo Thun'],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['source'], 'vicloabsa')
+        self.assertEqual(response.json()['status'], 'auto_detected')
+        self.assertEqual(response.json()['method'], 'shopee_category')
 
     def test_log_values_and_keys_are_bounded(self):
         for details in ({'key': 'x' * 201}, {'x' * 65: 1}):
@@ -77,11 +95,11 @@ class HTTPTests(unittest.TestCase):
         }).status_code, 200)
 
     def test_model_context_overflow_is_reported_instead_of_empty_success(self):
-        self.model.predict_unified.side_effect = InputTooLongError('text_exceeds_model_context')
-        result = self.client.post('/predict', json={'text': 'tốt'})
+        self.model.predict.side_effect = InputTooLongError('text_exceeds_model_context')
+        result = self.client.post('/predict', json={'text': 'tốt', 'source': 'vicloabsa'})
         self.assertEqual(result.status_code, 422)
         self.assertEqual(result.json()['detail'], 'text_exceeds_model_context')
-        batch = self.client.post('/predict/batch', json={'reviews': ['tốt']})
+        batch = self.client.post('/predict/batch', json={'source': 'vicloabsa', 'reviews': ['tốt']})
         row = batch.json()['results'][0]
         self.assertEqual((row['status'], row['error']), ('error', 'text_exceeds_model_context'))
 
@@ -93,5 +111,5 @@ class HTTPTests(unittest.TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['access-control-allow-origin'], origin)
-        self.assertEqual(self.client.post('/predict', json={'text': 'tốt'},
+        self.assertEqual(self.client.post('/predict', json={'text': 'tốt', 'source': 'vicloabsa'},
                                          headers={'Origin': 'https://evil.example'}).status_code, 403)

@@ -53,9 +53,9 @@ class APIActivityTests(unittest.TestCase):
             if text == 'fail':
                 raise RuntimeError('test failure')
             return []
-        model = SimpleNamespace(categories={'clothes': []}, predict_unified=Mock(side_effect=infer))
+        model = SimpleNamespace(categories={'vicloabsa': []}, predict=Mock(side_effect=infer), predict_unified=Mock())
         api.predictor = model
-        request = SimpleNamespace(run_id='run-1', product_id='1.10', source='unified', reviews=[
+        request = SimpleNamespace(run_id='run-1', product_id='1.10', source='vicloabsa', reviews=[
             {'review_id': 'r1', 'text': 'tốt', 'rating': 5},
             {'review_id': 'r2', 'text': 'tốt', 'rating': 3},
             {'review_id': 'r3', 'text': 'fail'},
@@ -65,7 +65,7 @@ class APIActivityTests(unittest.TestCase):
         response = api.predict_batch(request)
         self.assertEqual([row['status'] for row in response['results']], ['ok', 'ok', 'error', 'error'])
         self.assertEqual(response['preprocessing']['rejected'], 1)
-        self.assertEqual(model.predict_unified.call_count, 2)
+        self.assertEqual(model.predict.call_count, 2)
         self.assertEqual([row['review_id'] for row in contexts], ['r1', 'r3'])
         self.assertTrue(all(row['run_id'] == 'run-1' for row in contexts))
         self.assertTrue(all(row['product_id'] == '1.10' for row in contexts))
@@ -80,8 +80,8 @@ class APIActivityTests(unittest.TestCase):
     def test_single_analysis_logs_completion_without_changing_result(self):
         api = load_handlers()
         prediction = [{'start': 0, 'end': 3, 'aspect': 'Pin', 'category': 'BATTERY', 'sentiment': 'positive'}]
-        api.predictor = SimpleNamespace(categories={'phones': []}, predict_unified=Mock(return_value=prediction))
-        response = api.predict(SimpleNamespace(text='Pin tốt', source='unified', run_id='run1', product_id='1.10'))
+        api.predictor = SimpleNamespace(categories={'visd4sa': []}, predict=Mock(return_value=prediction), predict_unified=Mock())
+        response = api.predict(SimpleNamespace(text='Pin tốt', source='visd4sa', run_id='run1', product_id='1.10'))
         self.assertEqual(response['aspects'], prediction)
         self.assertEqual(api.log_event.call_args_list[-1].args[0], 'single_analysis_completed')
 
