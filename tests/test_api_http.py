@@ -52,7 +52,7 @@ class HTTPTests(unittest.TestCase):
 
     def test_unknown_source_and_large_batch_are_rejected(self):
         self.assertEqual(self.client.post('/predict', json={'text': 'tốt', 'source': 'wrong'}).status_code, 422)
-        self.assertEqual(self.client.post('/predict/batch', json={'reviews': ['tốt'] * 31}).status_code, 422)
+        self.assertEqual(self.client.post('/predict/batch', json={'source': 'vicloabsa', 'reviews': ['tốt'] * 31}).status_code, 422)
         self.model.predict_unified.assert_not_called()
 
     def test_errors_do_not_expose_private_paths(self):
