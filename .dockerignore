@@ -3,9 +3,9 @@
 !backend/*.py
 !backend/requirements.txt
 !deploy/
-!deploy/oracle/
-!deploy/oracle/constraints.txt
-!deploy/oracle/Dockerfile
+!deploy/aws/
+!deploy/aws/Dockerfile
+!deploy/aws/constraints.txt
 !tests/
 !tests/fixtures/
 !tests/fixtures/inference_batching_reviews.json
@@ -14,5 +14,6 @@
 **/.env*
 models/**
 vncorenlp/**
+VnCoreNLP/**
 logs/**
 .git/**
