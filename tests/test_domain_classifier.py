@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from backend.domain_classifier import AUTO_THRESHOLD, CONFIRM_THRESHOLD, detect_product_domain
@@ -52,6 +54,16 @@ class DomainClassifierTests(unittest.TestCase):
         })
         self.assertIsNone(result["source"])
         self.assertEqual(result["method"], "metadata_text_conflict")
+
+    def test_public_shopee_product_examples_route_to_the_expected_source(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "shopee_domain_samples.json"
+        samples = json.loads(fixture_path.read_text(encoding="utf-8"))["products"]
+        for product in samples:
+            with self.subTest(product=product["id"]):
+                result = detect_product_domain(product)
+                self.assertEqual(result["source"], product["expected_source"])
+                self.assertEqual(result["status"], "auto_detected")
+                self.assertEqual(result["method"], "shopee_category")
 
     def test_category_id_mapping_can_be_configured_without_guessing_ids(self):
         with patch.dict("os.environ", {"ABSA_DOMAIN_CATEGORY_ID_MAP": '{"verified-123":"visd4sa"}'}):
