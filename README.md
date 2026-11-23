@@ -6,6 +6,10 @@ Chuẩn bị phát hành công khai: xem [báo cáo rà soát và các bước c
 
 ## 1. Chức năng hệ thống
 
+### Chọn miền suy luận (Hướng B)
+
+Side Panel yêu cầu chọn miền trước khi phân tích: `vicloabsa` cho thời trang/quần áo (taxonomy ViCloABSA), `visd4sa` cho điện thoại/điện tử (taxonomy ViSD4SA). Hai miền dùng chung checkpoint NB39 → NB46 → NB04 nhưng chỉ truy vấn taxonomy được chọn. Extension không tự suy đoán domain. `unified` chỉ là chế độ thử nghiệm, không dùng để đối chiếu trực tiếp với NB55.
+
 Hệ thống phân tích bình luận tiếng Việt theo **khía cạnh** (Aspect-Based Sentiment Analysis — ABSA):
 
 1. **NB39 — XLM-R Joint Biaffine:** đề xuất đoạn khía cạnh (span) và nhóm khía cạnh (category).
@@ -182,7 +186,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/health" | ConvertTo-Json -Depth 5
 ```powershell
 $payload = @{
     text = "Áo đẹp nhưng chất vải hơi mỏng, giao hàng nhanh."
-    source = "unified"
+    source = "vicloabsa"
 } | ConvertTo-Json -Depth 5
 
 Invoke-RestMethod `
@@ -240,6 +244,8 @@ Invoke-RestMethod `
 7. Nhấn biểu tượng Extension để mở **Side Panel**.
 
 ### Demo theo một sản phẩm Shopee
+
+Trước khi phân tích, chọn **Lĩnh vực sản phẩm**. Coolmate/quần áo chọn ViCloABSA; điện thoại chọn ViSD4SA.
 
 - Mở trang sản phẩm Shopee; Side Panel tự đọc tên, giá và thông tin đánh giá trên trang.
 - Khi chưa phân tích hoặc đang lấy bình luận, Side Panel tự theo sản phẩm trên tab. Đổi sản phẩm sẽ dừng lượt lấy cũ, xóa dữ liệu cũ và tải thông tin sản phẩm mới.
