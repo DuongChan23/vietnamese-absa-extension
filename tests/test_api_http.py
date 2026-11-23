@@ -85,6 +85,14 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(response.json()['status'], 'auto_detected')
         self.assertEqual(response.json()['method'], 'shopee_category')
 
+    def test_medium_confidence_domain_is_only_a_suggestion(self):
+        response = self.client.post('/domain/detect', json={'name': 'Coolmate'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'confirmation_required')
+        self.assertIsNone(response.json()['source'])
+        self.assertEqual(response.json()['suggested_source'], 'vicloabsa')
+        self.assertTrue(response.json()['requires_confirmation'])
+
     def test_log_values_and_keys_are_bounded(self):
         for details in ({'key': 'x' * 201}, {'x' * 65: 1}):
             self.assertEqual(self.client.post('/activity/log', json={
