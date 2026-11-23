@@ -35,6 +35,33 @@ test('batch requests include run/product IDs and log progress without changing r
   } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
 });
 
+test('batch result preserves model, taxonomy merge policy, and per-batch preprocessing metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => url.endsWith('/predict/batch')
+    ? {
+      ok: true,
+      json: async () => ({
+        source: 'vicloabsa',
+        model: 'NB39+NB46+NB04',
+        evaluation_note: 'Source-conditioned inference as in NB55',
+        category_merge_policy: 'source_preserving_exact_duplicate_v1',
+        preprocessing: { accepted: 1, rejected: 0 },
+        rejected: [],
+        results: [{ review_id: 'r-1', text: 'áo đẹp', status: 'ok', aspects: [], aspects_merged: [] }],
+      }),
+    }
+    : { ok: true, json: async () => ({ activity_log: { enabled: true } }) };
+  try {
+    const result = await analyzeReviewBatch(
+      [{ review_id: 'r-1', text: 'áo đẹp' }], '1.10', () => {}, { source: 'vicloabsa' }
+    );
+    assert.equal(result.model, 'NB39+NB46+NB04');
+    assert.equal(result.evaluation_note, 'Source-conditioned inference as in NB55');
+    assert.equal(result.category_merge_policy, 'source_preserving_exact_duplicate_v1');
+    assert.deepEqual(result.preprocessing_batches, [{ batch: 1, stats: { accepted: 1, rejected: 0 } }]);
+  } finally { await flushActivityLog(); globalThis.fetch = originalFetch; }
+});
+
 test('aborting a product run prevents later batches', async () => {
   const originalFetch = globalThis.fetch;
   const controller = new AbortController();
