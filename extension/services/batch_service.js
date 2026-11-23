@@ -25,6 +25,8 @@ export async function analyzeReviewBatch(
   const total = reviews.length;
   let processed = 0;
   let batchError = null;
+  let responseMetadata = null;
+  const preprocessingBatches = [];
   const context = { runId, productId };
 
   for (let start = 0; start < total; start += BATCH_SIZE) {
@@ -66,6 +68,18 @@ export async function analyzeReviewBatch(
 
       const data = await response.json();
       signal?.throwIfAborted();
+
+      if (responseMetadata === null) {
+        responseMetadata = {
+          model: data.model ?? null,
+          evaluation_note: data.evaluation_note ?? null,
+          category_merge_policy: data.category_merge_policy ?? null,
+        };
+      }
+      preprocessingBatches.push({
+        batch: batchNumber,
+        stats: data.preprocessing ?? null,
+      });
 
       if (!Array.isArray(data.results) || !data.results.every(row =>
         row && typeof row.text === "string" && ["ok", "error"].includes(row.status)
@@ -122,6 +136,8 @@ export async function analyzeReviewBatch(
     ).length,
     rejected,
     results,
+    ...responseMetadata,
+    preprocessing_batches: preprocessingBatches,
     stopped_early: processed < total,
     error: batchError,
   };
