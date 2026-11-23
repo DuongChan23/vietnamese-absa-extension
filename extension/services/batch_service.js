@@ -71,9 +71,9 @@ export async function analyzeReviewBatch(
 
       if (responseMetadata === null) {
         responseMetadata = {
-          model: data.model ?? null,
-          evaluation_note: data.evaluation_note ?? null,
-          category_merge_policy: data.category_merge_policy ?? null,
+          ...(typeof data.model === "string" ? { model: data.model } : {}),
+          ...(typeof data.evaluation_note === "string" ? { evaluation_note: data.evaluation_note } : {}),
+          ...(typeof data.category_merge_policy === "string" ? { category_merge_policy: data.category_merge_policy } : {}),
         };
       }
       preprocessingBatches.push({
