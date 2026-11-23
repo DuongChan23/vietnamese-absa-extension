@@ -428,3 +428,5 @@ footer {
   .rating-average { min-width: 80px; }
   .brand h1 { font-size: 15px; }
 }
+
+.domain-select{display:block;width:100%;border:1px solid #d0d5dd;border-radius:9px;background:#fff;color:#202939;padding:11px 12px;font:inherit;line-height:1.4}.domain-select:disabled{opacity:.6;cursor:wait}

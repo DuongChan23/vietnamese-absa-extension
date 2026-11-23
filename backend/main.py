@@ -165,7 +165,7 @@ def predict(req: PredictRequest):
     log_event('single_analysis_started', **context, source=req.source, text_chars=len(req.text))
     try:
         aspects = run_inference(req.text, req.source, model, **context)
-        merged = merge_aspects(aspects)
+        merged = merge_aspects(aspects, source=req.source)
         log_event('single_analysis_completed', **context, duration_ms=(perf_counter() - started) * 1000,
                   aspects=len(aspects), merged_aspects=len(merged))
         return {**response_metadata(req.source), 'text': req.text, 'aspects': aspects, 'aspects_merged': merged}
@@ -207,7 +207,7 @@ def predict_batch(req: BatchPredictRequest):
                 log_event('review_analysis_started', **fields, text_chars=len(text), cache_hit=text in seen_texts)
                 with activity_context(**fields):
                     aspects = cache.predict(text, req.source)
-                row.update(status='ok', aspects=aspects, aspects_merged=merge_aspects(aspects))
+                row.update(status='ok', aspects=aspects, aspects_merged=merge_aspects(aspects, source=req.source))
                 seen_texts.add(text)
         except InputTooLongError:
             row['error'] = 'text_exceeds_model_context'
