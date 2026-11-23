@@ -66,7 +66,7 @@ class AwsPackageTests(unittest.TestCase):
             "https://-bad.example",
             "https://bad..example",
             "https://example.com\\\\evil",
-            "https://example.com\\n",
+            "https://example.com" + chr(10),
             "https://example.com%0a.evil",
             "https://127.0.0.1",
             "https://localhost",
