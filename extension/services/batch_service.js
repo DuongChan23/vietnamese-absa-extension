@@ -13,8 +13,9 @@ export async function analyzeReviewBatch(
   reviews,
   productId,
   onProgress = () => {},
-  { signal, runId } = {}
+  { signal, runId, source = "vicloabsa" } = {}
 ) {
+  if (!["vicloabsa", "visd4sa"].includes(source)) throw new Error("Hãy chọn lĩnh vực ViCloABSA hoặc ViSD4SA.");
   if (!Array.isArray(reviews) || reviews.length === 0) {
     throw new Error("Chưa có bình luận để phân tích.");
   }
@@ -36,7 +37,7 @@ export async function analyzeReviewBatch(
     });
 
     const payload = {
-      source: "unified",
+      source,
       run_id: runId || null,
       product_id: productId || null,
       reviews: batch.map((item) => ({
