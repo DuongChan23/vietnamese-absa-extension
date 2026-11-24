@@ -271,7 +271,7 @@ test('completed manual-domain analysis exports full review predictions as JSON',
 
   assert.equal(panel.exports.length, 1);
   const { payload, filename } = panel.exports[0];
-  assert.match(filename, /^shopee-absa-1_10-.*\\.json$/);
+  assert.match(filename, /^shopee-absa-1_10-.*\.json$/);
   assert.equal(payload.schema, 'vietnamese-absa-extension.analysis-export');
   assert.equal(payload.domain.selected_source, 'vicloabsa');
   assert.equal(payload.domain.detection, null);
