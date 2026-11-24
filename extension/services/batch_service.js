@@ -25,6 +25,8 @@ export async function analyzeReviewBatch(
   const total = reviews.length;
   let processed = 0;
   let batchError = null;
+  let responseMetadata = null;
+  const preprocessingBatches = [];
   const context = { runId, productId };
 
   for (let start = 0; start < total; start += BATCH_SIZE) {
@@ -72,6 +74,23 @@ export async function analyzeReviewBatch(
       ) || (data.rejected !== undefined && !Array.isArray(data.rejected))) {
         throw new Error("API không trả về danh sách kết quả hợp lệ.");
       }
+
+      // Keep backend provenance for reproducible JSON exports.
+      // Do not rewrite any raw prediction or taxonomy label.
+      if (data.source != null && data.source !== source) {
+        throw new Error("Taxonomy Backend trả về không khớp với lĩnh vực đã chọn.");
+      }
+      if (responseMetadata === null) {
+        responseMetadata = {
+          ...(typeof data.model === "string" ? { model: data.model } : {}),
+          ...(typeof data.evaluation_note === "string" ? { evaluation_note: data.evaluation_note } : {}),
+          ...(typeof data.category_merge_policy === "string" ? { category_merge_policy: data.category_merge_policy } : {}),
+        };
+      }
+      preprocessingBatches.push({
+        batch: batchNumber,
+        stats: data.preprocessing ?? null,
+      });
 
       results.push(...data.results);
 
@@ -121,6 +140,8 @@ export async function analyzeReviewBatch(
     ).length,
     rejected,
     results,
+    ...responseMetadata,
+    preprocessing_batches: preprocessingBatches,
     stopped_early: processed < total,
     error: batchError,
   };
