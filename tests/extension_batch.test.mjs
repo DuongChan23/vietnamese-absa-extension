@@ -41,6 +41,40 @@ test('batch requests include run/product IDs, selected source and progress', asy
   }
 });
 
+test('batch result preserves backend provenance and preprocessing for JSON export', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => url.endsWith('/predict/batch')
+    ? {
+      ok: true,
+      json: async () => ({
+        source: 'vicloabsa',
+        model: 'NB39+NB46+NB04',
+        evaluation_note: 'Source-conditioned inference as in NB55',
+        category_merge_policy: 'source_preserving_exact_duplicate_v1',
+        preprocessing: { accepted: 1, rejected: 0 },
+        rejected: [],
+        results: [{ review_id: 'r-1', text: 'áo đẹp', status: 'ok',
+          aspects: [], aspects_merged: [] }],
+      }),
+    }
+    : { ok: true, json: async () => ({ activity_log: { enabled: false } }) };
+  try {
+    const result = await analyzeReviewBatch(
+      [{ review_id: 'r-1', text: 'áo đẹp' }], '1.10', () => {},
+      { source: 'vicloabsa' }
+    );
+    assert.equal(result.model, 'NB39+NB46+NB04');
+    assert.equal(result.evaluation_note, 'Source-conditioned inference as in NB55');
+    assert.equal(result.category_merge_policy, 'source_preserving_exact_duplicate_v1');
+    assert.deepEqual(result.preprocessing_batches, [
+      { batch: 1, stats: { accepted: 1, rejected: 0 } },
+    ]);
+  } finally {
+    await flushActivityLog();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('phone/electronics selection is forwarded as visd4sa', async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];

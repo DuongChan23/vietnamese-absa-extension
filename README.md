@@ -302,6 +302,26 @@ Với bản hiện tại, `/health` cần có `"api_version": "0.3.1"` và trư�
 `activity_log`. Nếu chưa có, tiến trình cổng 8000 vẫn đang chạy code cũ hoặc
 được khởi động từ thư mục khác.
 
+### Xuất dữ liệu phân tích JSON
+
+Sau khi hoàn tất (hoặc dừng sớm sau một phần kết quả) trên sản phẩm Shopee,
+mở phần **Dữ liệu thực nghiệm** ở đầu dashboard và nhấn **Xuất JSON**. File
+`shopee-absa-<product-id>-<timestamp>.json` được tạo trong Chrome, không gửi
+thêm dữ liệu tới dịch vụ bên ngoài.
+
+JSON chứa metadata sản phẩm, miền đã chọn, thông tin run, bình luận gốc,
+dự đoán `aspects` và `aspects_merged`, thống kê, các review bị loại và
+chi tiết tiền xử lý theo batch. Ghép dự đoán theo `review_id` khi có,
+không tự đổi nhãn `SER&ACC` thành `Service`.
+
+Tính năng **Xuất JSON** trên `main` không phụ thuộc tự động nhận diện miền;
+người dùng vẫn chọn ViCloABSA hoặc ViSD4SA thủ công. Xem
+[đặc tả JSON export](docs/analysis_json_export.md).
+
+**Lưu ý:** Dữ liệu phân tích hiện giữ trong bộ nhớ của Side Panel. Khi
+Reload Extension, đóng Side Panel hoặc điều hướng và chọn Đổi sản phẩm,
+kết quả chưa xuất có thể mất; hãy xuất JSON trước các thao tác đó.
+
 ## 8. Tự kiểm tra trước buổi demo
 
 - [ ] Mở đúng thư mục project, nhìn thấy `backend/main.py` và `extension/manifest.json`.
